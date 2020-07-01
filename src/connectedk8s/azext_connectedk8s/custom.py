@@ -59,6 +59,9 @@ Pull_HelmChart_Fault_Type = 'helm-chart-pull-error'
 Export_HelmChart_Fault_Type = 'helm-chart-export-error'
 Get_Kubernetes_Version_Fault_Type = 'kubernetes-get-version-error'
 Get_Kubernetes_Distro_Fault_Type = 'kubernetes-get-distribution-error'
+User_Not_Found_Type = 'aad-user-not-found-error'
+Invalid_AAD_Profile_Details_Type = 'aad-profile-invalid-error'
+
 
 
 # pylint:disable=unused-argument
@@ -116,6 +119,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
     kubernetes_distro = get_kubernetes_distro(configuration)
 
     aad_profile, is_aad_enabled = get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app_id, aad_tenant_id)
+    telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.IsAADEnabled': is_aad_enabled})
 
     kubernetes_properties = {
         'Context.Default.AzureCLI.KubernetesVersion': kubernetes_version,
@@ -166,7 +170,6 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
                 public_key = client.get(configmap_rg_name,
                                         configmap_cluster_name).agent_public_key_certificate
                 cc = generate_request_payload(configuration, location, public_key, tags, aad_profile)
-                return
                 try:
                     return sdk_no_wait(no_wait, client.create, resource_group_name=resource_group_name,
                                        cluster_name=cluster_name, connected_cluster=cc)
@@ -269,7 +272,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
                         "--set", "global.onboardingPrivateKey={}".format(private_key_pem),
                         "--set", "systemDefaultValues.spnOnboarding=false",
                         "--set", "systemDefaultValues.connectproxy-agent.enabled={}".format(is_aad_enabled),
-                        "--set", "systemDefaultValues.azureArcAgents.autoUpdate={}".format(not is_aad_enabled),
+                        "--set", "systemDefaultValues.azureArcAgents.releaseTrain={}".format(get_release_train()),
                         "--kubeconfig", kube_config, "--output", "json"]
     if kube_context:
         cmd_helm_install.extend(["--kube-context", kube_context])
@@ -420,7 +423,7 @@ def get_helm_registry(profile, location):
 
     get_chart_location_url = "https://{}.dp.kubernetesconfiguration.azure.com/{}/GetLatestHelmPackagePath?api-version=2019-11-01-preview".format(location, 'azure-arc-k8sagents')
     query_parameters = {}
-    query_parameters['releaseTrain'] = os.getenv('RELEASETRAIN') if os.getenv('RELEASETRAIN') else 'stable'
+    query_parameters['releaseTrain'] = get_release_train()
     header_parameters = {}
     header_parameters['Authorization'] = "Bearer {}".format(str(token))
     try:
@@ -434,6 +437,9 @@ def get_helm_registry(profile, location):
     telemetry.set_exception(exception=str(response.json()), fault_type=Get_HelmRegistery_Path_Fault_Type,
                             summary='Error while fetching helm chart registry path')
     raise CLIError("Error while fetching helm chart registry path: {}".format(str(response.json())))
+
+def get_release_train():
+    return os.getenv('RELEASETRAIN') if os.getenv('RELEASETRAIN') else 'stable'
 
 
 def pull_helm_chart(registry_path, kube_config, kube_context):
@@ -525,6 +531,9 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
         # Get name of the user from current context as kube_context is none.
         user = current_context.get('context').get('user')
         if user is None:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
+                                    summary='User in not found in current context')
             raise CLIError("User not found in currentcontext: " + str(current_context))
     else:
         # Get name of the user from name of the kube_context passed.
@@ -535,6 +544,9 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
                 user = context.get('context').get('user')
                 break
         if not user_found or user is None:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
+                                    summary='User in not found in kube context')
             raise CLIError("User not found in kubecontext: " + str(kube_context))
     retrieved_aad_server_app_id, retrieved_aad_client_app_id, retrieved_aad_tenant_id = get_user_aad_details(kube_config, user)
 
@@ -548,14 +560,20 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
     if not aad_tenant_id is None:
         retrieved_aad_tenant_id = aad_tenant_id
 
-    # If atleast one of is not filled treat it as non aad enabled cluster.
     if retrieved_aad_client_app_id != "" and retrieved_aad_client_app_id != "" and retrieved_aad_tenant_id != "":
+        # If all fields are filled it is a aad enabled cluster.
         aad_enabled = True
-    else:
+    elif retrieved_aad_client_app_id == "" and retrieved_aad_server_app_id == "" and retrieved_aad_tenant_id == "":
+        # If all fields are empty it is not aad enabled cluster.
         aad_enabled = False
-        retrieved_aad_server_app_id = ""
-        retrieved_aad_client_app_id = ""
-        retrieved_aad_tenant_id = ""
+    else:
+        # If fields are partially filled raise error.
+        telemetry.set_user_fault()
+        telemetry.set_exception(exception='Invalid AAD Profile', fault_type=Invalid_AAD_Profile_Details_Type,
+                                summary='AAD profile details are partially passed/filled')
+        raise CLIError("AAD profile details are missing server-app-id: " + retrieved_aad_server_app_id
+                       + "client-app-id: " + retrieved_aad_client_app_id
+                       + " tenant-id: " + retrieved_aad_tenant_id)
 
     return ConnectedClusterAADProfile(
         server_app_id=retrieved_aad_server_app_id,
@@ -577,7 +595,9 @@ def get_user_aad_details(kube_config, required_user):
                 else:
                     auth_provider_config = user_details.get('auth-provider').get('config')
                     return auth_provider_config.get('apiserver-id'), auth_provider_config.get('client-id'), auth_provider_config.get('tenant-id')
-
+    telemetry.set_user_fault()
+    telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
+                            summary='User details not found in Users section.')
     raise CLIError("User details for User " + str(required_user) + " not found in KubeConfig: " + str(kube_config))
 
 def get_pod_dict(api_instance):
