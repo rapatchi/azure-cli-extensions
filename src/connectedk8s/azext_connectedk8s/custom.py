@@ -9,6 +9,7 @@ import time
 import subprocess
 from subprocess import Popen, PIPE
 from base64 import b64encode
+import yaml
 import requests
 
 from knack.util import CLIError
@@ -66,7 +67,7 @@ Get_Kubernetes_Distro_Fault_Type = 'kubernetes-get-distribution-error'
 # pylint: disable=too-many-statements
 # pylint: disable=line-too-long
 def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_proxy=None, http_proxy=None, no_proxy=None, location=None,
-                        kube_config=None, kube_context=None, no_wait=False, tags=None):
+                        kube_config=None, kube_context=None, no_wait=False, tags=None, aad_server_app_id=None, aad_client_app_id=None, aad_tenant_id=None):
     logger.warning("Ensure that you have the latest helm version installed before proceeding.")
     logger.warning("This operation might take a while...\n")
 
@@ -113,6 +114,8 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
     # Get kubernetes cluster info for telemetry
     kubernetes_version = get_server_version(configuration)
     kubernetes_distro = get_kubernetes_distro(configuration)
+
+    aad_profile, is_aad_enabled = get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app_id, aad_tenant_id)
 
     kubernetes_properties = {
         'Context.Default.AzureCLI.KubernetesVersion': kubernetes_version,
@@ -162,7 +165,8 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
                 # Re-put connected cluster
                 public_key = client.get(configmap_rg_name,
                                         configmap_cluster_name).agent_public_key_certificate
-                cc = generate_request_payload(configuration, location, public_key, tags)
+                cc = generate_request_payload(configuration, location, public_key, tags, aad_profile)
+                return
                 try:
                     return sdk_no_wait(no_wait, client.create, resource_group_name=resource_group_name,
                                        cluster_name=cluster_name, connected_cluster=cc)
@@ -264,6 +268,8 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
                         "--set", "global.noProxy={}".format(no_proxy),
                         "--set", "global.onboardingPrivateKey={}".format(private_key_pem),
                         "--set", "systemDefaultValues.spnOnboarding=false",
+                        "--set", "systemDefaultValues.connectproxy-agent.enabled={}".format(is_aad_enabled),
+                        "--set", "systemDefaultValues.azureArcAgents.autoUpdate={}".format(not is_aad_enabled),
                         "--kubeconfig", kube_config, "--output", "json"]
     if kube_context:
         cmd_helm_install.extend(["--kube-context", kube_context])
@@ -275,7 +281,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
         raise CLIError("Unable to install helm release: " + error_helm_install.decode("ascii"))
 
     # Create connected cluster resource
-    cc = generate_request_payload(configuration, location, public_key, tags)
+    cc = generate_request_payload(configuration, location, public_key, tags, aad_profile)
     try:
         put_cc_response = sdk_no_wait(no_wait, client.create,
                                       resource_group_name=resource_group_name,
@@ -493,13 +499,8 @@ def get_kubernetes_distro(configuration):
         logger.warning("Exception while trying to fetch kubernetes distribution: %s\n", e)
 
 
-def generate_request_payload(configuration, location, public_key, tags):
+def generate_request_payload(configuration, location, public_key, tags, aad_profile):
     # Create connected cluster resource object
-    aad_profile = ConnectedClusterAADProfile(
-        tenant_id="",
-        client_app_id="",
-        server_app_id=""
-    )
     identity = ConnectedClusterIdentity(
         type="SystemAssigned"
     )
@@ -514,6 +515,70 @@ def generate_request_payload(configuration, location, public_key, tags):
     )
     return cc
 
+def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app_id, aad_tenant_id):
+
+    all_contexts, current_context = config.list_kube_config_contexts()
+    user = None
+    aad_enabled = False
+
+    if kube_context is None:
+        # Get name of the user from current context as kube_context is none.
+        user = current_context.get('context').get('user')
+        if user is None:
+            raise CLIError("User not found in currentcontext: " + str(current_context))
+    else:
+        # Get name of the user from name of the kube_context passed.
+        user_found = False
+        for context in all_contexts:
+            if context.get('name') == kube_context:
+                user_found = True
+                user = context.get('context').get('user')
+                break
+        if not user_found or user is None:
+            raise CLIError("User not found in kubecontext: " + str(kube_context))
+    retrieved_aad_server_app_id, retrieved_aad_client_app_id, retrieved_aad_tenant_id = get_user_aad_details(kube_config, user)
+
+    # Override retrived values with passed values in cli.
+    if not aad_server_app_id is None:
+        retrieved_aad_server_app_id = aad_server_app_id
+
+    if not aad_client_app_id is None:
+        retrieved_aad_client_app_id = aad_client_app_id
+
+    if not aad_tenant_id is None:
+        retrieved_aad_tenant_id = aad_tenant_id
+
+    # If atleast one of is not filled treat it as non aad enabled cluster.
+    if retrieved_aad_client_app_id != "" and retrieved_aad_client_app_id != "" and retrieved_aad_tenant_id != "":
+        aad_enabled = True
+    else:
+        aad_enabled = False
+        retrieved_aad_server_app_id = ""
+        retrieved_aad_client_app_id = ""
+        retrieved_aad_tenant_id = ""
+
+    return ConnectedClusterAADProfile(
+        server_app_id=retrieved_aad_server_app_id,
+        client_app_id=retrieved_aad_client_app_id,
+        tenant_id=retrieved_aad_tenant_id
+    ), aad_enabled
+
+def get_user_aad_details(kube_config, required_user):
+    with open(kube_config) as f:
+        config_data = yaml.safe_load(f)
+        users = config_data.get('users')
+        for user in users:
+            if user.get('name') == required_user:
+                user_details = user.get('user')
+                ## Check if user is AAD user or not.
+                if not 'auth-provider' in user_details:
+                    ## The user is not a AAD user so return empty strings
+                    return "", "", ""
+                else:
+                    auth_provider_config = user_details.get('auth-provider').get('config')
+                    return auth_provider_config.get('apiserver-id'), auth_provider_config.get('client-id'), auth_provider_config.get('tenant-id')
+
+    raise CLIError("User details for User " + str(required_user) + " not found in KubeConfig: " + str(kube_config))
 
 def get_pod_dict(api_instance):
     pod_dict = {}

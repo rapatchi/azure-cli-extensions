@@ -21,6 +21,9 @@ def load_arguments(self, _):
         c.argument('https_proxy', options_list=['--https-proxy'], help='Https proxy url to be used.')
         c.argument('http_proxy', options_list=['--http-proxy'], help='Http proxy url to be used.')
         c.argument('no_proxy', options_list=['--no-proxy'], help='List of urls/CIDRs for which proxy should not to be used.')
+        c.argument('aad_server_app_id', options_list=['--aad-server-app-id'], help='AAD Server app id of your kubernetes cluster.')
+        c.argument('aad_client_app_id', options_list=['--aad-client-app-id'], help='AAD Client app id of your kubernetes cluster.')
+        c.argument('aad_tenant_id', options_list=['--aad-tenant-id'], help='The ID of an Azure Active Directory tenant.')
 
     with self.argument_context('connectedk8s list') as c:
         pass
