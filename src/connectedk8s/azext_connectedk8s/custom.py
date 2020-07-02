@@ -526,38 +526,44 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
     all_contexts, current_context = config.list_kube_config_contexts()
     user = None
     aad_enabled = False
-
-    if kube_context is None:
-        # Get name of the user from current context as kube_context is none.
-        user = current_context.get('context').get('user')
-        if user is None:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
-                                    summary='User in not found in current context')
-            raise CLIError("User not found in currentcontext: " + str(current_context))
-    else:
-        # Get name of the user from name of the kube_context passed.
-        user_found = False
-        for context in all_contexts:
-            if context.get('name') == kube_context:
-                user_found = True
-                user = context.get('context').get('user')
-                break
-        if not user_found or user is None:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
-                                    summary='User in not found in kube context')
-            raise CLIError("User not found in kubecontext: " + str(kube_context))
-    retrieved_aad_server_app_id, retrieved_aad_client_app_id, retrieved_aad_tenant_id = get_user_aad_details(kube_config, user)
+    try:
+        if kube_context is None:
+            # Get name of the user from current context as kube_context is none.
+            user = current_context.get('context').get('user')
+            if user is None:
+                telemetry.set_user_fault()
+                telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
+                                        summary='User in not found in current context')
+                raise CLIError("User not found in currentcontext: " + str(current_context))
+        else:
+            # Get name of the user from name of the kube_context passed.
+            user_found = False
+            for context in all_contexts:
+                if context.get('name') == kube_context:
+                    user_found = True
+                    user = context.get('context').get('user')
+                    break
+            if not user_found or user is None:
+                telemetry.set_user_fault()
+                telemetry.set_exception(exception='User not found', fault_type=User_Not_Found_Type,
+                                        summary='User in not found in kube context')
+                raise CLIError("User not found in kubecontext: " + str(kube_context))
+        retrieved_aad_server_app_id, retrieved_aad_client_app_id, retrieved_aad_tenant_id = get_user_aad_details(kube_config, user)
+    except Exception as e: # pylint: disable=broad-except
+        telemetry.set_user_fault()
+        telemetry.set_exception(exception=e, fault_type=User_Not_Found_Type,
+                                summary='Failed to get aad profile from kube config')
+        logger.warning("Exception while trying to fetch aad profile details: %s\n", e)
+        raise CLIError("Failed to fetch AAD profile details from kubecontext: " + str(kube_context))
 
     # Override retrived values with passed values in cli.
-    if not aad_server_app_id is None:
+    if aad_server_app_id:
         retrieved_aad_server_app_id = aad_server_app_id
 
-    if not aad_client_app_id is None:
+    if aad_client_app_id:
         retrieved_aad_client_app_id = aad_client_app_id
 
-    if not aad_tenant_id is None:
+    if aad_tenant_id:
         retrieved_aad_tenant_id = aad_tenant_id
 
     if retrieved_aad_client_app_id != "" and retrieved_aad_client_app_id != "" and retrieved_aad_tenant_id != "":
