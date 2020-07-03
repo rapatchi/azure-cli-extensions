@@ -523,7 +523,15 @@ def generate_request_payload(configuration, location, public_key, tags, aad_prof
 
 def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app_id, aad_tenant_id):
 
-    all_contexts, current_context = config.list_kube_config_contexts()
+    try:
+        all_contexts, current_context = config.list_kube_config_contexts()
+    except Exception as e: # pylint: disable=broad-except
+        telemetry.set_user_fault()
+        telemetry.set_exception(exception=e, fault_type=Load_Kubeconfig_Fault_Type,
+                                summary='Problem listing kube contexts')
+        logger.warning("Exception while trying to list kube contexts: %s\n", e)
+        raise CLIError("Problem listing kube contexts." + str(e))
+
     user = None
     aad_enabled = False
     try:
