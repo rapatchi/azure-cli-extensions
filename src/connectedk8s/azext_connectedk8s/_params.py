@@ -4,13 +4,13 @@
 # --------------------------------------------------------------------------------------------
 # pylint: disable=line-too-long
 
-from azure.cli.core.commands.parameters import get_location_type
+import os.path
+
+from argcomplete.completers import FilesCompleter
+from azure.cli.core.commands.parameters import get_location_type, file_type, tags_type
 from azure.cli.core.commands.validators import get_default_location_from_resource_group
 
-
 def load_arguments(self, _):
-
-    from azure.cli.core.commands.parameters import tags_type
 
     with self.argument_context('connectedk8s connect') as c:
         c.argument('tags', tags_type)
@@ -35,3 +35,9 @@ def load_arguments(self, _):
         c.argument('cluster_name', options_list=['--name', '-n'], id_part='name', help='The name of the connected cluster.')
         c.argument('kube_config', options_list=['--kube-config'], help='Path to the kube config file.')
         c.argument('kube_context', options_list=['--kube-context'], help='Kubconfig context from current machine.')
+
+    with self.argument_context('connectedk8s get-credentials') as c:
+        c.argument('cluster_name', options_list=['--name', '-n'], id_part='name', help='The name of the connected cluster.')
+        c.argument('context_name', options_list=['--context'], help='If specified, overwrite the default context name.')
+        c.argument('overwrite_existing', options_list=['--overwrite-existing'], help='Overwrite any existing cluster entry with the same name.')
+        c.argument('path', options_list=['--file', '-f'], type=file_type, completer=FilesCompleter(), default=os.path.join(os.path.expanduser('~'), '.kube', 'config'), help='Kubernetes configuration file to update. Use "-" to print YAML to stdout instead.')
