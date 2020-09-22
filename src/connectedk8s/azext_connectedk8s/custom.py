@@ -697,7 +697,7 @@ def helm_install_release(chart_path, subscription_id, kubernetes_distro, resourc
                         "--set", "global.noProxy={}".format(no_proxy),
                         "--set", "global.onboardingPrivateKey={}".format(private_key_pem),
                         "--set", "systemDefaultValues.spnOnboarding=false",
-                        "--set", "systemDefaultValues.clusterconnect-agent.enabled={}".format(is_aad_enabled),
+                        "--set", "systemDefaultValues.clusterconnect-agent.enabled=true",
                         "--set", "systemDefaultValues.extensionoperator.enabled={}".format(extension_operator_enabled),
                         "--output", "json"]
     # To set some other helm parameters through file
