@@ -86,6 +86,8 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
         if (values_file.endswith("'") or values_file.endswith('"')):
             values_file = values_file[:-1]
 
+    extension_operator_enabled = get_extension_operator_flag(values_file, values_file_provided)
+
     # Validate the helm environment file for Dogfood.
     dp_endpoint_dogfood = None
     release_train_dogfood = None
@@ -228,13 +230,35 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
     # Install azure-arc agents
     helm_install_release(chart_path, subscription_id, kubernetes_distro, resource_group_name, cluster_name,
                          location, onboarding_tenant_id, http_proxy, https_proxy, no_proxy, private_key_pem, kube_config,
-                         kube_context, no_wait, values_file_provided, values_file, is_aad_enabled)
+                         kube_context, no_wait, values_file_provided, values_file, is_aad_enabled, extension_operator_enabled)
     return put_cc_response
 
 
 def send_cloud_telemetry(cmd):
     cloud_name = cmd.cli_ctx.cloud.name
     telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.AzureCloud': cloud_name})
+
+
+def get_extension_operator_flag(values_file, values_file_provided):
+    if not values_file_provided:
+        return True
+
+    with open(values_file, 'r') as f:
+        try:
+            env_dict = yaml.safe_load(f)
+        except Exception as e:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception=e, fault_type=consts.Helm_Environment_File_Fault_Type,
+                                    summary='Problem loading the helm environment file')
+            raise CLIError("Problem loading the helm environment file: " + str(e))
+        if 'systemDefaultValues' not in env_dict:
+            return True
+        if 'extensionoperator' not in env_dict['systemDefaultValues']:
+            return True
+        if 'enabled' not in env_dict['systemDefaultValues']['extensionoperator']:
+            return True
+
+    return env_dict['systemDefaultValues']['extensionoperator']['enabled']
 
 
 def validate_env_file_dogfood(values_file, values_file_provided):
@@ -659,7 +683,8 @@ def get_release_namespace(kube_config, kube_context):
 
 def helm_install_release(chart_path, subscription_id, kubernetes_distro, resource_group_name, cluster_name,
                          location, onboarding_tenant_id, http_proxy, https_proxy, no_proxy, private_key_pem,
-                         kube_config, kube_context, no_wait, values_file_provided, values_file, is_aad_enabled):
+                         kube_config, kube_context, no_wait, values_file_provided, values_file, is_aad_enabled,
+                         extension_operator_enabled):
     cmd_helm_install = ["helm", "upgrade", "--install", "azure-arc", chart_path,
                         "--set", "global.subscriptionId={}".format(subscription_id),
                         "--set", "global.kubernetesDistro={}".format(kubernetes_distro),
@@ -673,6 +698,7 @@ def helm_install_release(chart_path, subscription_id, kubernetes_distro, resourc
                         "--set", "global.onboardingPrivateKey={}".format(private_key_pem),
                         "--set", "systemDefaultValues.spnOnboarding=false",
                         "--set", "systemDefaultValues.clusterconnect-agent.enabled={}".format(is_aad_enabled),
+                        "--set", "systemDefaultValues.extensionoperator.enabled={}".format(extension_operator_enabled),
                         "--output", "json"]
     # To set some other helm parameters through file
     if values_file_provided:
