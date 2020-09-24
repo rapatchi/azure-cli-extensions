@@ -487,7 +487,7 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
     if kube_config is None:
         kube_config = os.getenv('KUBECONFIG') if os.getenv('KUBECONFIG') else os.path.join(os.path.expanduser('~'), '.kube', 'config')
     try:
-        all_contexts, current_context = config.list_kube_config_contexts()
+        all_contexts, current_context = config.list_kube_config_contexts(config_file=kube_config)
     except Exception as e:  # pylint: disable=broad-except
         telemetry.set_user_fault()
         telemetry.set_exception(exception=e, fault_type=consts.Load_Kubeconfig_Fault_Type,
@@ -581,6 +581,7 @@ def get_user_aad_details(kube_config, required_user):
                 return "", "", ""
             else:
                 auth_provider_config = user_details.get('auth-provider').get('config')
+                telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.AutoDetectedAADProfile': True})
                 return auth_provider_config.get('apiserver-id'), auth_provider_config.get('client-id'), auth_provider_config.get('tenant-id')
     telemetry.set_user_fault()
     telemetry.set_exception(exception='User AAD details not found', fault_type=consts.Get_User_AAD_Details_Failed_Fault_Type,
@@ -723,6 +724,9 @@ def helm_install_release(chart_path, subscription_id, kubernetes_distro, resourc
                                 summary='Unable to install helm release')
         logger.warning("Please check if the azure-arc namespace was deployed and run 'kubectl get pods -n azure-arc' to check if all the pods are in running state. A possible cause for pods stuck in pending state could be insufficient resources on the kubernetes cluster to onboard to arc.")
         raise CLIError("Unable to install helm release: " + error_helm_install.decode("ascii"))
+    else:
+        if is_aad_enabled:
+            telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.OnboardedAADEnabledCluster': True})
 
 
 def create_cc_resource(client, resource_group_name, cluster_name, cc, no_wait):
@@ -794,10 +798,33 @@ def list_cluster_user_credentials(cmd,
                                   token=None,
                                   path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                                   overwrite_existing=False):
-    if token is not None:
-        value = AuthenticationDetailsValue(token=token)
-    else:
+    telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.GetCredentialsInvoked': True})
+
+    if token is None:
+        try:
+            clusterDetails = client.get(resource_group_name, cluster_name)
+        except Exception as e:
+            telemetry.set_exception(exception=e, fault_type=consts.Get_Connected_Cluster_Details_Failed_Fault_Type,
+                                    summary='Unable to get connected cluster credentials')
+            raise CLIError("Failed to get connected cluster details." + str(e))
+        aadProfile = clusterDetails.aad_profile
+        if aadProfile is None:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception="Requires token based auth", fault_type=consts.Get_Credentials_Invoked_Without_Token_For_NON_AAD_Fault_Type,
+                                    summary='For Non-AAD connected cluster, get-credentials requires client token for authentication.')
+            raise CLIError("For Non-AAD connected cluster, get-credentials requires client token for authentication in --auth-token.")
+        cc_tenant_id = aadProfile.tenant_id
+        cc_client_id = aadProfile.client_app_id
+        cc_server_id = aadProfile.server_app_id
+        if (cc_tenant_id == "" or cc_client_id == "" or cc_server_id == ""):
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception="Requires token based auth", fault_type=consts.Get_Credentials_Invoked_Without_Token_For_NON_AAD_Fault_Type,
+                                    summary='For Non-AAD connected cluster, get-credentials requires client token for authentication.')
+            raise CLIError("For Non-AAD connected cluster, get-credentials requires client token for authentication. Pass it in --auth-token.")
+
         value = None
+    else:
+        value = AuthenticationDetailsValue(token=token)
 
     try:
         credentialResults = client.list_cluster_user_credentials(resource_group_name, cluster_name, value)
