@@ -460,12 +460,12 @@ def generate_request_payload(configuration, location, public_key, tags, aad_prof
 
 
 def get_kubeconfig_dict(kube_config=None):
-    #Gets the kubeconfig as per kubectl(after applying all merging rules)
+    # Gets the kubeconfig as per kubectl(after applying all merging rules)
     args = ['kubectl', 'config', 'view']
     if kube_config:
         args += ["--kubeconfig", kube_config]
 
-    #subprocess run
+    # subprocess run
     try:
         proc = run(args, stdout=PIPE, stderr=STDOUT, universal_newlines=True)
         if proc.returncode:
@@ -812,7 +812,7 @@ def list_cluster_user_credentials(cmd,
             telemetry.set_user_fault()
             telemetry.set_exception(exception="Requires token based auth", fault_type=consts.Get_Credentials_Invoked_Without_Token_For_NON_AAD_Fault_Type,
                                     summary='For Non-AAD connected cluster, get-credentials requires client token for authentication.')
-            raise CLIError("For Non-AAD connected cluster, get-credentials requires client token for authentication in --auth-token.")
+            raise CLIError("Please pass in Kubernetes service account token in --auth-token parameter to get the kubeconfig or AAD enable the cluster to support seamless login using your AAD account.")
         cc_tenant_id = aadProfile.tenant_id
         cc_client_id = aadProfile.client_app_id
         cc_server_id = aadProfile.server_app_id
@@ -820,11 +820,11 @@ def list_cluster_user_credentials(cmd,
             telemetry.set_user_fault()
             telemetry.set_exception(exception="Requires token based auth", fault_type=consts.Get_Credentials_Invoked_Without_Token_For_NON_AAD_Fault_Type,
                                     summary='For Non-AAD connected cluster, get-credentials requires client token for authentication.')
-            raise CLIError("For Non-AAD connected cluster, get-credentials requires client token for authentication. Pass it in --auth-token.")
+            raise CLIError("Please pass in Kubernetes service account token in --auth-token parameter to get the kubeconfig or AAD enable the cluster to support seamless login using your AAD account.")
 
-        value = None
+        value = None  # AAD scenario doesn't requires token
     else:
-        value = AuthenticationDetailsValue(token=token)
+        value = AuthenticationDetailsValue(token=token)  # Non-AAD scenario token-based auth
 
     try:
         credentialResults = client.list_cluster_user_credentials(resource_group_name, cluster_name, value)
