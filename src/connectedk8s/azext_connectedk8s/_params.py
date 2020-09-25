@@ -50,4 +50,4 @@ def load_arguments(self, _):
         c.argument('context_name', options_list=['--context'], help='If specified, overwrite the default context name.')
         c.argument('overwrite_existing', options_list=['--overwrite-existing'], help='Overwrite any existing cluster entry with the same name.')
         c.argument('token', options_list=['--auth-token'], help='Client authentication token for non-AAD scenario.')
-        c.argument('path', options_list=['--file', '-f'], type=file_type, completer=FilesCompleter(), default=os.environ.get('KUBECONFIG', os.path.join(os.path.expanduser('~'), '.kube', 'config')), help="Kubernetes configuration file to update. If not provided, if KUBECONFIG is set, updates that file, else '~/.kube/config'. Use '-' to print YAML to stdout instead.")
+        c.argument('path', options_list=['--file', '-f'], type=file_type, completer=FilesCompleter(), default=os.environ.get('KUBECONFIG', os.path.join(os.path.expanduser('~'), '.kube', 'config')), help="Kubernetes configuration file to update. If not provided, defaulting to, if KUBECONFIG is set, updates that file, else '~/.kube/config'. Use '-' to print YAML to stdout instead.")
