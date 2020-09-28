@@ -53,3 +53,4 @@ Different_Object_With_Same_Name_Fault_Type = "Kubeconfig has an object with same
 Invalid_Auth_Method_Fault = "Invalid authentication method passed"
 Get_Connected_Cluster_Details_Failed_Fault_Type = "Failed to get connected cluster details"
 Get_Credentials_Invoked_Without_Token_For_NON_AAD_Fault_Type = "Get Credentials Invoked without client token for Non-AAD connected cluster"
+Cluster_Info_Not_Found_Type = 'Error while doing kubectl cluster-info'
