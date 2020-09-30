@@ -186,7 +186,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
                                     summary='Connected cluster resource already exists')
             raise CLIError("The connected cluster resource {} already exists ".format(cluster_name) +
                            "in the resource group {} ".format(resource_group_name) +
-                           "and corresponds to a different Kubernetes cluster. To onboard this Kubernetes cluster" +
+                           "and corresponds to a different Kubernetes cluster. To onboard this Kubernetes cluster " +
                            "to Azure, specify different resource name or resource group name.")
 
     # Resource group Creation
@@ -465,31 +465,17 @@ def generate_request_payload(configuration, location, public_key, tags, aad_prof
 
 
 def check_aks_cluster(kube_config, kube_context):
-    try:
-        config_data = get_kubeconfig_dict(kube_config=kube_config)
-    except Exception as e:
-        telemetry.set_user_fault()
-        telemetry.set_exception(exception=e, fault_type=consts.Kubeconfig_Failed_To_Load_Fault_Type,
-                                summary='Problem loading the kubeconfig file')
-        raise CLIError("Problem loading the kubeconfig file: " + str(e))
-
+    config_data = get_kubeconfig_node_dict(kube_config=kube_config)
     try:
         all_contexts, current_context = config.list_kube_config_contexts(config_file=kube_config)
     except Exception as e:  # pylint: disable=broad-except
-        telemetry.set_user_fault()
-        telemetry.set_exception(exception=e, fault_type=consts.Load_Kubeconfig_Fault_Type,
-                                summary='Problem listing kube contexts')
         logger.warning("Exception while trying to list kube contexts: %s\n", e)
-        raise CLIError("Problem listing kube contexts." + str(e))
 
     if kube_context is None:
         # Get name of the cluster from current context as kube_context is none.
         cluster_name = current_context.get('context').get('cluster')
         if cluster_name is None:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception='Cluster not found', fault_type=consts.Cluster_Info_Not_Found_Type,
-                                    summary='Cluster is not found in current context')
-            raise CLIError("Cluster not found in currentcontext: " + str(current_context))
+            logger.warning("Cluster not found in currentcontext: " + str(current_context))
     else:
         cluster_found = False
         for context in all_contexts:
@@ -498,15 +484,13 @@ def check_aks_cluster(kube_config, kube_context):
                 cluster_name = context.get('context').get('cluster')
                 break
         if not cluster_found or cluster_name is None:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception='Cluster not found', fault_type=consts.Cluster_Info_Not_Found_Type,
-                                    summary='Cluster in not found in kube context')
-            raise CLIError("Cluster not found in kubecontext: " + str(kube_context))
+            logger.warning("Cluster not found in kubecontext: " + str(kube_context))
 
-    clusters = config_data.get('clusters')
+    clusters = config_data.safe_get('clusters')
+    server_address = ""
     for cluster in clusters:
-        if cluster.get('name') == cluster_name:
-            server_address = cluster.get('cluster').get('server')
+        if cluster.safe_get('name') == cluster_name:
+            server_address = cluster.safe_get('cluster').get('server')
             break
 
     if server_address.find(".azmk8s.io:") == -1:
@@ -536,6 +520,18 @@ def get_kubeconfig_dict(kube_config=None):
         raise CLIError("Error while fetching kubeconfig through kubectl." + str(ex))
 
     return config_dict
+
+
+def get_kubeconfig_node_dict(kube_config=None):
+    if kube_config is None:
+        kube_config = os.getenv('KUBECONFIG') if os.getenv('KUBECONFIG') else os.path.join(os.path.expanduser('~'), '.kube', 'config')
+    try:
+        kubeconfig_data = config.kube_config._get_kube_config_loader_for_yaml_file(kube_config)._config
+    except Exception as ex:
+        telemetry.set_exception(exception=ex, fault_type=consts.Load_Kubeconfig_Fault_Type,
+                                summary='Error while fetching details from kubeconfig')
+        raise CLIError("Error while fetching details kubeconfig." + str(ex))
+    return kubeconfig_data
 
 
 def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app_id, aad_tenant_id):
@@ -586,7 +582,7 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
         telemetry.set_exception(exception=e, fault_type=consts.User_Not_Found_Type,
                                 summary='Failed to get aad profile from kube config')
         logger.warning("Exception while trying to fetch aad profile details: %s\n", e)
-        raise CLIError("Failed to fetch AAD profile details from kubecontext: " + str(kube_context))
+        raise CLIError("Failed to fetch AAD profile details from kubecontext: " + str(kube_context) + ". " + str(e))
 
     # Override retrieved values with passed values in cli.
     if aad_server_app_id:
@@ -621,16 +617,16 @@ def get_aad_profile(kube_config, kube_context, aad_server_app_id, aad_client_app
 
 def get_user_aad_details(kube_config, required_user):
     try:
-        config_data = get_kubeconfig_dict(kube_config=kube_config)
+        config_data = get_kubeconfig_node_dict(kube_config=kube_config)
     except Exception as e:
         telemetry.set_user_fault()
         telemetry.set_exception(exception=e, fault_type=consts.Kubeconfig_Failed_To_Load_Fault_Type,
                                 summary='Problem loading the kubeconfig file while getting user aad details')
         raise CLIError("Problem loading the kubeconfig file while getting user aad details : " + str(e))
-    users = config_data.get('users')
+    users = config_data.safe_get('users')
     for user in users:
-        if user.get('name') == required_user:
-            user_details = user.get('user')
+        if user.safe_get('name') == required_user:
+            user_details = user.safe_get('user')
             # Check if user is AAD user or not.
             if 'auth-provider' not in user_details:
                 # The user is not a AAD user so return empty strings
