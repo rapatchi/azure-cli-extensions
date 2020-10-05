@@ -848,7 +848,7 @@ def list_cluster_user_credentials(cmd,
                                   cluster_name,
                                   context_name=None,
                                   token=None,
-                                  path=os.environ.get('KUBECONFIG', os.path.join(os.path.expanduser('~'), '.kube', 'config')),
+                                  path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                                   overwrite_existing=False):
     telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.GetCredentialsInvoked': True})
 
