@@ -20,7 +20,7 @@ from knack.log import get_logger
 from knack.prompting import prompt_y_n
 from knack.prompting import NoTTYException
 from azure.cli.core.commands.client_factory import get_subscription_id
-from azure.cli.core.util import sdk_no_wait
+from azure.cli.core.util import sdk_no_wait, is_guid
 from azure.cli.core import telemetry
 from msrestazure.azure_exceptions import CloudError
 from kubernetes import client as kube_client, config
@@ -58,7 +58,22 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
 
     # Fetching Tenant Id
     graph_client = _graph_client_factory(cmd.cli_ctx)
-    onboarding_tenant_id = graph_client.config.tenant_id
+    custom_tenant_id = os.getenv('CUSTOMTENANTID')
+    if custom_tenant_id:
+        logger.warning("Custom Tenant Id '{}' is provided. Using that for onboarding purposes.".format(custom_tenant_id))
+        onboarding_tenant_id = custom_tenant_id
+    else:
+        onboarding_tenant_id = graph_client.config.tenant_id
+    if aad_server_app_id:
+        try:
+            object_id = _resolve_service_principal(graph_client.service_principals, aad_server_app_id)
+            sp_details = graph_client.service_principals.get(object_id)
+            print(sp_details)
+        except Exception as e:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception=e, fault_type=consts.Invalid_AAD_Profile_Details_Type,
+                                    summary='Invalid AAD server app id.')
+            raise CLIError("Invalid AAD server app id. " + str(e))
 
     aad_tenant_id = onboarding_tenant_id
 
@@ -1174,3 +1189,15 @@ def update_agents(cmd, client, resource_group_name, cluster_name, https_proxy=""
         raise CLIError(str.format(consts.Update_Agent_Failure, error_helm_upgrade.decode("ascii")))
 
     return str.format(consts.Update_Agent_Success, connected_cluster.name)
+
+
+def _resolve_service_principal(client, identifier):  # Uses service principal graph client
+    # todo: confirm with graph team that a service principal name must be unique
+    result = list(client.list(filter="servicePrincipalNames/any(c:c eq '{}')".format(identifier)))
+    if result:
+        return result[0].object_id
+    if is_guid(identifier):
+        return identifier  # assume an object id
+    error = CLIError("Service principal '{}' doesn't exist".format(identifier))
+    error.status_code = 404  # Make sure CLI returns 3
+    raise error
