@@ -67,7 +67,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
     if aad_server_app_id:
         try:
             object_id = _resolve_service_principal(graph_client.service_principals, aad_server_app_id)
-            sp_details = graph_client.service_principals.get(object_id)
+            graph_client.service_principals.get(object_id)
         except Exception as e:
             telemetry.set_user_fault()
             telemetry.set_exception(exception=e, fault_type=consts.Invalid_AAD_Profile_Details_Type,
@@ -478,6 +478,41 @@ def generate_request_payload(configuration, location, public_key, tags, aad_prof
     return cc
 
 
+def check_proxy_kubeconfig(kube_config, kube_context):
+    config_data = get_kubeconfig_node_dict(kube_config=kube_config)
+    try:
+        all_contexts, current_context = config.list_kube_config_contexts(config_file=kube_config)
+    except Exception as e:  # pylint: disable=broad-except
+        logger.warning("Exception while trying to list kube contexts: %s\n", e)
+
+    if kube_context is None:
+        # Get name of the cluster from current context as kube_context is none.
+        cluster_name = current_context.get('context').get('cluster')
+        if cluster_name is None:
+            logger.warning("Cluster not found in currentcontext: " + str(current_context))
+    else:
+        cluster_found = False
+        for context in all_contexts:
+            if context.get('name') == kube_context:
+                cluster_found = True
+                cluster_name = context.get('context').get('cluster')
+                break
+        if not cluster_found or cluster_name is None:
+            logger.warning("Cluster not found in kubecontext: " + str(kube_context))
+
+    clusters = config_data.safe_get('clusters')
+    server_address = ""
+    for cluster in clusters:
+        if cluster.safe_get('name') == cluster_name:
+            server_address = cluster.safe_get('cluster').get('server')
+            break
+
+    if server_address.find("k8sconnect.azure.com") == -1:
+        return False
+    else:
+        return True
+
+
 def check_aks_cluster(kube_config, kube_context):
     config_data = get_kubeconfig_node_dict(kube_config=kube_config)
     try:
@@ -685,6 +720,14 @@ def delete_connectedk8s(cmd, client, resource_group_name, cluster_name,
                                 summary='Problem loading the kubeconfig file')
         raise CLIError("Problem loading the kubeconfig file." + str(e))
     configuration = kube_client.Configuration()
+
+    # Check if the arc agents are being deleted using proxy kubeconfig
+    is_proxy_kubeconfig = check_proxy_kubeconfig(kube_config=kube_config, kube_context=kube_context)
+    if is_proxy_kubeconfig:
+        telemetry.set_user_fault()
+        telemetry.set_exception(exception="The arc agents shouldn't be deleted with proxy kubeconfig.", fault_type=consts.Deleting_Arc_Agents_With_Proxy_Kubeconfig_Fault_Type,
+                                summary="The arc agents shouldn't be deleted with proxy kubeconfig. Either change the kubecontext on your machine or pass the kubecontext of the cluster in --kube-context.")
+        raise CLIError("The arc agents shouldn't be deleted/uninstalled with proxy kubeconfig. Either change the kubecontext on your machine or pass the kubecontext of the cluster in --kube-context.")
 
     # Checking the connection to kubernetes cluster.
     # This check was added to avoid large timeouts when connecting to AAD Enabled
