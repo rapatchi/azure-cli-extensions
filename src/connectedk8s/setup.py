@@ -55,6 +55,7 @@ setup(
     url='https://github.com/Azure/azure-cli-extensions',
     long_description_content_type="text/markdown",
     long_description=README + '\n\n' + HISTORY,
+    long_description_content_type="text/markdown",
     license='MIT',
     classifiers=CLASSIFIERS,
     packages=find_packages(),
