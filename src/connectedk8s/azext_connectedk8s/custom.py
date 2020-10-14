@@ -68,7 +68,6 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
         try:
             object_id = _resolve_service_principal(graph_client.service_principals, aad_server_app_id)
             sp_details = graph_client.service_principals.get(object_id)
-            print(sp_details)
         except Exception as e:
             telemetry.set_user_fault()
             telemetry.set_exception(exception=e, fault_type=consts.Invalid_AAD_Profile_Details_Type,
