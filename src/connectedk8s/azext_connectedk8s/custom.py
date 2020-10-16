@@ -842,7 +842,7 @@ def create_cc_resource(client, resource_group_name, cluster_name, cc, no_wait):
     try:
         return sdk_no_wait(no_wait, client.create, resource_group_name=resource_group_name,
                            cluster_name=cluster_name, connected_cluster=cc)
-    except CloudError as e:
+    except Exception as e:
         utils.arm_exception_handler(e, consts.Create_ConnectedCluster_Fault_Type, 'Unable to create connected cluster resource')
 
 
@@ -852,7 +852,7 @@ def delete_cc_resource(client, resource_group_name, cluster_name, no_wait):
                     resource_group_name=resource_group_name,
                     cluster_name=cluster_name)
     except CloudError as e:
-        utils.arm_exception_handler(e, consts.Delete_ConnectedCluster_Fault_Type, 'Unable to create connected cluster resource')
+        utils.arm_exception_handler(e, consts.Delete_ConnectedCluster_Fault_Type, 'Unable to delete connected cluster resource')
 
 
 def delete_arc_agents(release_namespace, kube_config, kube_context, configuration):
