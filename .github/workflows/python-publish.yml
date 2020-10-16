@@ -4,6 +4,7 @@
 name: Upload Python Package
 
 on:
+  workflow_dispatch:
   # Trigger the workflow on push,
   # but only for the main branch
   push:
@@ -27,10 +28,12 @@ jobs:
         pip install setuptools wheel
         cd src/connectedk8s
         ls
+        printf "[bdist_wheel]\nuniversal=1\n" > setup.cfg
         python setup.py sdist bdist_wheel
         cd dist
         ls
     - name: publish .whl
       uses: actions/upload-artifact@v2
       with:
-        path: src/connectedk8s/dist/connectedk8s-0.3.0-py3-none-any.whl
+        name: connectedk8s-whl
+        path: src/connectedk8s/dist/connectedk8s-*.whl
