@@ -35,8 +35,8 @@ CLASSIFIERS = [
 
 # TODO: Add any additional SDK dependencies here
 DEPENDENCIES = [
-    'kubernetes',
-    'pycryptodome'
+    'kubernetes==11.0.0',
+    'pycryptodome==3.9.8'
 ]
 
 with open('README.md', 'r', encoding='utf-8') as f:
@@ -53,7 +53,6 @@ setup(
     author_email='k8connect@microsoft.com',
     # TODO: consider pointing directly to your source code instead of the generic repo
     url='https://github.com/Azure/azure-cli-extensions',
-    long_description_content_type="text/markdown",
     long_description=README + '\n\n' + HISTORY,
     long_description_content_type="text/markdown",
     license='MIT',
