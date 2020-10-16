@@ -507,7 +507,7 @@ def check_proxy_kubeconfig(kube_config, kube_context):
             server_address = cluster.safe_get('cluster').get('server')
             break
 
-    if server_address.find("k8sconnect.azure.com") == -1:
+    if server_address.find(".k8sconnect.azure") == -1:
         return False
     else:
         return True
