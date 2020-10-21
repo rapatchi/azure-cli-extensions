@@ -62,6 +62,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
     if custom_tenant_id:
         logger.warning("Custom Tenant Id '{}' is provided. Using that for onboarding purposes.".format(custom_tenant_id))
         onboarding_tenant_id = custom_tenant_id
+        graph_client.config.tenant_id = custom_tenant_id
     else:
         onboarding_tenant_id = graph_client.config.tenant_id
     if aad_server_app_id:
@@ -72,7 +73,25 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
             telemetry.set_user_fault()
             telemetry.set_exception(exception=e, fault_type=consts.Invalid_AAD_Profile_Details_Type,
                                     summary='Invalid AAD server app id.')
-            raise CLIError("Invalid AAD server app id. " + str(e))
+            extra_error_details = ""
+            if custom_tenant_id:
+                extra_error_details += " Please check if the custom tenant id provided is correct."
+            raise CLIError("Invalid AAD server app id. " + str(e) + str(extra_error_details))
+    if aad_client_app_id:
+        try:
+            # Client app id sp is not present for AKS aad v2 cluster, so sp validation is not done, just checking for a valid guid as of now
+            # object_id = _resolve_service_principal(graph_client.service_principals, aad_client_app_id)
+            # graph_client.service_principals.get(object_id)
+            if not is_guid(aad_client_app_id):
+                telemetry.set_user_fault()
+                telemetry.set_exception(exception='Invalid GUID aad client app id', fault_type=consts.Invalid_AAD_Profile_Details_Type,
+                                        summary='Invalid AAD client app id.')
+                raise CLIError("Invalid GUID AAD client app id.")
+        except Exception as e:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception=e, fault_type=consts.Invalid_AAD_Profile_Details_Type,
+                                    summary='Invalid AAD client app id.')
+            raise CLIError("Invalid AAD client app id. " + str(e))
 
     aad_tenant_id = onboarding_tenant_id
 
@@ -478,7 +497,7 @@ def generate_request_payload(configuration, location, public_key, tags, aad_prof
     return cc
 
 
-def check_proxy_kubeconfig(kube_config, kube_context):
+def get_server_address(kube_config, kube_context):
     config_data = get_kubeconfig_node_dict(kube_config=kube_config)
     try:
         all_contexts, current_context = config.list_kube_config_contexts(config_file=kube_config)
@@ -506,42 +525,19 @@ def check_proxy_kubeconfig(kube_config, kube_context):
         if cluster.safe_get('name') == cluster_name:
             server_address = cluster.safe_get('cluster').get('server')
             break
+    return server_address
 
-    if server_address.find(".k8sconnect.azure") == -1:
+
+def check_proxy_kubeconfig(kube_config, kube_context):
+    server_address = get_server_address(kube_config, kube_context)
+    if server_address.find(".k8sconnect.azure.") == -1:
         return False
     else:
         return True
 
 
 def check_aks_cluster(kube_config, kube_context):
-    config_data = get_kubeconfig_node_dict(kube_config=kube_config)
-    try:
-        all_contexts, current_context = config.list_kube_config_contexts(config_file=kube_config)
-    except Exception as e:  # pylint: disable=broad-except
-        logger.warning("Exception while trying to list kube contexts: %s\n", e)
-
-    if kube_context is None:
-        # Get name of the cluster from current context as kube_context is none.
-        cluster_name = current_context.get('context').get('cluster')
-        if cluster_name is None:
-            logger.warning("Cluster not found in currentcontext: " + str(current_context))
-    else:
-        cluster_found = False
-        for context in all_contexts:
-            if context.get('name') == kube_context:
-                cluster_found = True
-                cluster_name = context.get('context').get('cluster')
-                break
-        if not cluster_found or cluster_name is None:
-            logger.warning("Cluster not found in kubecontext: " + str(kube_context))
-
-    clusters = config_data.safe_get('clusters')
-    server_address = ""
-    for cluster in clusters:
-        if cluster.safe_get('name') == cluster_name:
-            server_address = cluster.safe_get('cluster').get('server')
-            break
-
+    server_address = get_server_address(kube_config, kube_context)
     if server_address.find(".azmk8s.io:") == -1:
         return False
     else:
@@ -725,9 +721,9 @@ def delete_connectedk8s(cmd, client, resource_group_name, cluster_name,
     is_proxy_kubeconfig = check_proxy_kubeconfig(kube_config=kube_config, kube_context=kube_context)
     if is_proxy_kubeconfig:
         telemetry.set_user_fault()
-        telemetry.set_exception(exception="The arc agents shouldn't be deleted with proxy kubeconfig.", fault_type=consts.Deleting_Arc_Agents_With_Proxy_Kubeconfig_Fault_Type,
-                                summary="The arc agents shouldn't be deleted with proxy kubeconfig. Either change the kubecontext on your machine or pass the kubecontext of the cluster in --kube-context.")
-        raise CLIError("The arc agents shouldn't be deleted/uninstalled with proxy kubeconfig. Either change the kubecontext on your machine or pass the kubecontext of the cluster in --kube-context.")
+        telemetry.set_exception(exception="The arc agents shouldn't be deleted with cluster connect kubeconfig.", fault_type=consts.Deleting_Arc_Agents_With_Proxy_Kubeconfig_Fault_Type,
+                                summary="The arc agents shouldn't be deleted with cluster connect kubeconfig.")
+        raise CLIError("The arc agents shouldn't be deleted/uninstalled with cluster connect kubeconfig.")
 
     # Checking the connection to kubernetes cluster.
     # This check was added to avoid large timeouts when connecting to AAD Enabled
