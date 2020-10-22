@@ -79,19 +79,10 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
             raise CLIError("Invalid AAD server app id. " + str(e) + str(extra_error_details))
     if aad_client_app_id:
         try:
-            # Client app id sp is not present for AKS aad v2 cluster, so sp validation is not done, just checking for a valid guid as of now
-            # object_id = _resolve_service_principal(graph_client.service_principals, aad_client_app_id)
-            # graph_client.service_principals.get(object_id)
-            if not is_guid(aad_client_app_id):
-                telemetry.set_user_fault()
-                telemetry.set_exception(exception='Invalid GUID aad client app id', fault_type=consts.Invalid_AAD_Profile_Details_Type,
-                                        summary='Invalid AAD client app id.')
-                raise CLIError("Invalid GUID AAD client app id.")
+            object_id = _resolve_service_principal(graph_client.service_principals, aad_client_app_id)
+            graph_client.service_principals.get(object_id)
         except Exception as e:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception=e, fault_type=consts.Invalid_AAD_Profile_Details_Type,
-                                    summary='Invalid AAD client app id.')
-            raise CLIError("Invalid AAD client app id. " + str(e))
+            logger.warning("Couldn't validate the AAD client app id. Continuing without validation...")
 
     aad_tenant_id = onboarding_tenant_id
 
