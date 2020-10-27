@@ -70,7 +70,7 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
         telemetry.set_user_fault()
         telemetry.set_exception(exception='Incomplete aad details', fault_type=consts.Incomplete_AAD_Profile_Details_Fault_Type,
                                 summary='Please provide aad-server-app-id and aad-client-app-id together.')
-        raise CLIError("Please provide both aad-server-app-id and aad-client-app-id together.")
+        raise CLIError("Please provide both aad-server-app-id and aad-client-app-id together. Note that these two inputs are only required for Cluster Connect feature on an AAD enabled Kubernetes cluster.")
 
     if aad_server_app_id:
         try:
