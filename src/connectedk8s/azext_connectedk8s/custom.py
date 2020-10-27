@@ -712,9 +712,9 @@ def delete_connectedk8s(cmd, client, resource_group_name, cluster_name,
     is_proxy_kubeconfig = check_proxy_kubeconfig(kube_config=kube_config, kube_context=kube_context)
     if is_proxy_kubeconfig:
         telemetry.set_user_fault()
-        telemetry.set_exception(exception="The arc agents shouldn't be deleted with cluster connect kubeconfig.", fault_type=consts.Deleting_Arc_Agents_With_Proxy_Kubeconfig_Fault_Type,
-                                summary="The arc agents shouldn't be deleted with cluster connect kubeconfig.")
-        raise CLIError("The arc agents shouldn't be deleted/uninstalled with cluster connect kubeconfig.")
+        telemetry.set_exception(exception="The arc agents shouldn't be deleted with cluster connect credentials.", fault_type=consts.Deleting_Arc_Agents_With_Proxy_Kubeconfig_Fault_Type,
+                                summary="The arc agents shouldn't be deleted with cluster connect credentials.")
+        raise CLIError("The arc agents shouldn't be deleted/uninstalled with cluster connect credentials.")
 
     # Checking the connection to kubernetes cluster.
     # This check was added to avoid large timeouts when connecting to AAD Enabled
