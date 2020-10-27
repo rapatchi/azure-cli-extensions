@@ -65,6 +65,13 @@ def create_connectedk8s(cmd, client, resource_group_name, cluster_name, https_pr
         graph_client.config.tenant_id = custom_tenant_id
     else:
         onboarding_tenant_id = graph_client.config.tenant_id
+
+    if ((aad_server_app_id is None) and (aad_client_app_id is not None)) or ((aad_server_app_id is not None) and (aad_client_app_id is None)):
+        telemetry.set_user_fault()
+        telemetry.set_exception(exception='Incomplete aad details', fault_type=consts.Incomplete_AAD_Profile_Details_Fault_Type,
+                                summary='Please provide aad-server-app-id and aad-client-app-id together.')
+        raise CLIError("Please provide both aad-server-app-id and aad-client-app-id together.")
+
     if aad_server_app_id:
         try:
             object_id = _resolve_service_principal(graph_client.service_principals, aad_server_app_id)
