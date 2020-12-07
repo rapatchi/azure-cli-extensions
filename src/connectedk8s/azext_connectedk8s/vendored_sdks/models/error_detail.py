@@ -12,8 +12,8 @@
 from msrest.serialization import Model
 
 
-class ErrorDetails(Model):
-    """The error response details containing error code and error message.
+class ErrorDetail(Model):
+    """The error detail.
 
     Variables are only populated by the server, and will be ignored when
     sending a request.
@@ -22,19 +22,35 @@ class ErrorDetails(Model):
     :vartype code: str
     :ivar message: The error message.
     :vartype message: str
+    :ivar target: The error target.
+    :vartype target: str
+    :ivar details: The error details.
+    :vartype details: list[~azure.mgmt.hybridkubernetes.models.ErrorDetail]
+    :ivar additional_info: The error additional info.
+    :vartype additional_info:
+     list[~azure.mgmt.hybridkubernetes.models.ErrorAdditionalInfo]
     """
 
     _validation = {
         'code': {'readonly': True},
         'message': {'readonly': True},
+        'target': {'readonly': True},
+        'details': {'readonly': True},
+        'additional_info': {'readonly': True},
     }
 
     _attribute_map = {
         'code': {'key': 'code', 'type': 'str'},
         'message': {'key': 'message', 'type': 'str'},
+        'target': {'key': 'target', 'type': 'str'},
+        'details': {'key': 'details', 'type': '[ErrorDetail]'},
+        'additional_info': {'key': 'additionalInfo', 'type': '[ErrorAdditionalInfo]'},
     }
 
     def __init__(self, **kwargs):
-        super(ErrorDetails, self).__init__(**kwargs)
+        super(ErrorDetail, self).__init__(**kwargs)
         self.code = None
         self.message = None
+        self.target = None
+        self.details = None
+        self.additional_info = None

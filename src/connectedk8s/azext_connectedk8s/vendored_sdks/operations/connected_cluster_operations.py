@@ -373,7 +373,7 @@ class ConnectedClusterOperations(object):
     delete.metadata = {'url': '/subscriptions/{subscriptionId}/resourcegroups/{resourceGroupName}/providers/Microsoft.Kubernetes/connectedClusters/{clusterName}'}
 
     def list_cluster_user_credentials(
-            self, resource_group_name, cluster_name, value, custom_headers=None, raw=False, **operation_config):
+            self, resource_group_name, cluster_name, client_proxy=None, value=None, custom_headers=None, raw=False, **operation_config):
         """Gets cluster user credentials of a connected cluster.
 
         Gets cluster user credentials of the connected cluster with a specified
@@ -385,7 +385,10 @@ class ConnectedClusterOperations(object):
         :param cluster_name: The name of the Kubernetes cluster on which get
          is called.
         :type cluster_name: str
-        :param value:
+        :param client_proxy: Parameter to indicate whether the request is for
+         client side proxy or not
+        :type client_proxy: bool
+        :param value: Authentication token value.
         :type value:
          ~azure.mgmt.hybridkubernetes.models.AuthenticationDetailsValue
         :param dict custom_headers: headers that will be added to the request
@@ -415,6 +418,8 @@ class ConnectedClusterOperations(object):
         # Construct parameters
         query_parameters = {}
         query_parameters['api-version'] = self._serialize.query("self.api_version", self.api_version, 'str', min_length=1)
+        if client_proxy is not None:
+            query_parameters['ClientProxy'] = self._serialize.query("client_proxy", client_proxy, 'bool')
 
         # Construct headers
         header_parameters = {}
