@@ -23,13 +23,14 @@ class AuthenticationDetails(Model):
     :ivar authentication_method: Required. The mode of client authentication.
      Default value: "Token" .
     :vartype authentication_method: str
-    :param value: Authentication token value.
+    :param value: Required. Authentication token value.
     :type value:
      ~azure.mgmt.hybridkubernetes.models.AuthenticationDetailsValue
     """
 
     _validation = {
         'authentication_method': {'required': True, 'constant': True},
+        'value': {'required': True},
     }
 
     _attribute_map = {
@@ -39,6 +40,6 @@ class AuthenticationDetails(Model):
 
     authentication_method = "Token"
 
-    def __init__(self, *, value=None, **kwargs) -> None:
+    def __init__(self, *, value, **kwargs) -> None:
         super(AuthenticationDetails, self).__init__(**kwargs)
         self.value = value

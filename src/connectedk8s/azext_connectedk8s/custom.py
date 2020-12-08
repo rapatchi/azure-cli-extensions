@@ -14,6 +14,7 @@ import stat
 import platform
 import yaml
 import requests
+import urllib.request
 
 from knack.util import CLIError
 from knack.log import get_logger
@@ -1235,3 +1236,20 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     error = CLIError("Service principal '{}' doesn't exist".format(identifier))
     error.status_code = 404  # Make sure CLI returns 3
     raise error
+
+def client_side_proxy(cmd,client):
+    response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/hello.exe')
+    responseContent=response.read()
+    response.close()
+    home_dir = os.environ.get('USERPROFILE')
+    install_location = os.path.join(home_dir,r'.azure\cliextensions\connectedk8s\azext_connectedk8s\hello.exe')
+    f=open(install_location,'wb')
+    f.write(responseContent)
+    f.close()
+    token="67961e5de352e15f0106d5ec663d7d87df4241734fab5194cf9c7654418ed0e75bd6cb5d1bd9d8e1f48f135f3eb89e464e694ea2970c6e633f5316d6c3a92df1"
+    value = AuthenticationDetailsValue(token=token)
+    response=client.list_cluster_user_credentials("atharvatestrg","dfarcnonaad", value,client_proxy=True)
+    print(response.hybrid_connection_config)
+    print(response.kubeconfigs)
+    print(response.kubeconfigs[0].value)
+    print(response.kubeconfigs[0].name)
