@@ -1239,27 +1239,29 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     raise error
 
 def client_side_proxy(cmd,client):
-    # response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/arcProxy.exe')
-    # responseContent=response.read()
-    # response.close()
-    # home_dir = os.environ.get('USERPROFILE')
-    # install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
-    # install_dir=os.path.dirname(install_location)
-    # if not os.path.exists(install_dir):
-    #     os.makedirs(install_dir)
-    # f=open(install_location,'wb')
-    # f.write(responseContent)
-    # f.close()
+    home_dir = os.environ.get('USERPROFILE')
+    install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
+    if not os.path.isfile(install_location) :
+        response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/arcProxy.exe')
+        responseContent=response.read()
+        response.close()
+        install_dir=os.path.dirname(install_location)
+        if not os.path.exists(install_dir):
+            os.makedirs(install_dir)
+        f=open(install_location,'wb')
+        f.write(responseContent)
+        f.close()
+
     token="67961e5de352e15f0106d5ec663d7d87df4241734fab5194cf9c7654418ed0e75bd6cb5d1bd9d8e1f48f135f3eb89e464e694ea2970c6e633f5316d6c3a92df1"
     value = AuthenticationDetailsValue(token=token)
     response=client.list_cluster_user_credentials("atharvatestrg","dfarcnonaad", value,client_proxy=True)
-    p = Process(target=f)
+    p = Process(target=func)
     p.start()
     data=prepare_clientproxy_data(response)
     response=requests.post('http://localhost:47010/subscriptions/ee865f4b-7ce6-401f-8f89-e4eb9eb52b2f/resourceGroups/atharvatestrg/providers/Microsoft.Kubernetes/connectedClusters/dfarcnonaad/register',json=data)
     print(response.text)
     
-def f():
+def func():
     home_dir = os.environ.get('USERPROFILE')
     install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
     print(install_location)
