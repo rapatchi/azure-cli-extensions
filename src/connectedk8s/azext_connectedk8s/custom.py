@@ -8,7 +8,7 @@ import os
 import json
 import tempfile
 import time
-from subprocess import Popen, PIPE, run, STDOUT
+from subprocess import Popen, PIPE, run, STDOUT, call
 from base64 import b64encode
 import stat
 import platform
@@ -33,6 +33,7 @@ from azext_connectedk8s._client_factory import cf_resource_groups
 from azext_connectedk8s._client_factory import _resource_client_factory
 import azext_connectedk8s._constants as consts
 import azext_connectedk8s._utils as utils
+from multiprocessing import Process
 
 from .vendored_sdks.models import ConnectedCluster, ConnectedClusterAADProfile, ConnectedClusterIdentity, AuthenticationDetailsValue
 
@@ -1238,18 +1239,42 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     raise error
 
 def client_side_proxy(cmd,client):
-    response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/hello.exe')
-    responseContent=response.read()
-    response.close()
-    home_dir = os.environ.get('USERPROFILE')
-    install_location = os.path.join(home_dir,r'.azure\cliextensions\connectedk8s\azext_connectedk8s\hello.exe')
-    f=open(install_location,'wb')
-    f.write(responseContent)
-    f.close()
+    # response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/arcProxy.exe')
+    # responseContent=response.read()
+    # response.close()
+    # home_dir = os.environ.get('USERPROFILE')
+    # install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
+    # install_dir=os.path.dirname(install_location)
+    # if not os.path.exists(install_dir):
+    #     os.makedirs(install_dir)
+    # f=open(install_location,'wb')
+    # f.write(responseContent)
+    # f.close()
     token="67961e5de352e15f0106d5ec663d7d87df4241734fab5194cf9c7654418ed0e75bd6cb5d1bd9d8e1f48f135f3eb89e464e694ea2970c6e633f5316d6c3a92df1"
     value = AuthenticationDetailsValue(token=token)
     response=client.list_cluster_user_credentials("atharvatestrg","dfarcnonaad", value,client_proxy=True)
-    print(response.hybrid_connection_config)
-    print(response.kubeconfigs)
-    print(response.kubeconfigs[0].value)
-    print(response.kubeconfigs[0].name)
+    p = Process(target=f)
+    p.start()
+    data=prepare_clientproxy_data(response)
+    response=requests.post('http://localhost:47010/subscriptions/ee865f4b-7ce6-401f-8f89-e4eb9eb52b2f/resourceGroups/atharvatestrg/providers/Microsoft.Kubernetes/connectedClusters/dfarcnonaad/register',json=data)
+    print(response.text)
+    
+def f():
+    home_dir = os.environ.get('USERPROFILE')
+    install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
+    print(install_location)
+    call([install_location])
+
+def prepare_clientproxy_data(response):
+    data={}
+    data['kubeconfigs']=[]
+    kubeconfig={}
+    kubeconfig['name']='Kubeconfig'
+    kubeconfig['value']=b64encode(response.kubeconfigs[0].value).decode("utf-8")
+    data['kubeconfigs'].append(kubeconfig)
+    data['hybridConnectionConfig']={}
+    data['hybridConnectionConfig']['relay']=response.hybrid_connection_config.relay
+    data['hybridConnectionConfig']['hybridConnectionName']=response.hybrid_connection_config.hybrid_connection_name
+    data['hybridConnectionConfig']['token']=response.hybrid_connection_config.token
+    data['hybridConnectionConfig']['expiry']=response.hybrid_connection_config.expiration_time
+    return data
