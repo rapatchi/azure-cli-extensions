@@ -9,7 +9,7 @@ import json
 import tempfile
 import time
 from subprocess import Popen, PIPE, run, STDOUT, call
-from base64 import b64encode
+from base64 import b64encode,b64decode
 import stat
 import platform
 import yaml
@@ -1238,7 +1238,16 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     error.status_code = 404  # Make sure CLI returns 3
     raise error
 
-def client_side_proxy(cmd,client):
+def client_side_proxy(cmd,
+                      client,
+                      resource_group_name,
+                      cluster_name,
+                      token=None,
+                      path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
+                      overwrite_existing=False,
+                      context_name=None):
+    
+    subscription_id = get_subscription_id(cmd.cli_ctx)
     home_dir = os.environ.get('USERPROFILE')
     install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
     if not os.path.isfile(install_location) :
@@ -1251,21 +1260,19 @@ def client_side_proxy(cmd,client):
         f=open(install_location,'wb')
         f.write(responseContent)
         f.close()
-
-    token="67961e5de352e15f0106d5ec663d7d87df4241734fab5194cf9c7654418ed0e75bd6cb5d1bd9d8e1f48f135f3eb89e464e694ea2970c6e633f5316d6c3a92df1"
-    value = AuthenticationDetailsValue(token=token)
-    response=client.list_cluster_user_credentials("atharvatestrg","dfarcnonaad", value,client_proxy=True)
-    p = Process(target=func)
-    p.start()
-    data=prepare_clientproxy_data(response)
-    response=requests.post('http://localhost:47010/subscriptions/ee865f4b-7ce6-401f-8f89-e4eb9eb52b2f/resourceGroups/atharvatestrg/providers/Microsoft.Kubernetes/connectedClusters/dfarcnonaad/register',json=data)
-    print(response.text)
     
-def func():
-    home_dir = os.environ.get('USERPROFILE')
-    install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
-    print(install_location)
-    call([install_location])
+    if token is not None:
+        value = AuthenticationDetailsValue(token=token)
+        response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
+        p = Process(target=call,args=(install_location,))
+        p.start()
+        data=prepare_clientproxy_data(response)
+        uri=f'http://localhost:47010/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register'
+        response=requests.post(uri,json=data)
+        kubeconfig=json.loads(response.text)
+        kubeconfig=kubeconfig['kubeconfigs'][0]['value']
+        kubeconfig=b64decode(kubeconfig).decode("utf-8")
+        print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
 
 def prepare_clientproxy_data(response):
     data={}
