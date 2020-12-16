@@ -1262,17 +1262,20 @@ def client_side_proxy(cmd,
         f.close()
     
     if token is not None:
-        value = AuthenticationDetailsValue(token=token)
-        response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
-        p = Process(target=call,args=(install_location,))
-        p.start()
-        data=prepare_clientproxy_data(response)
-        uri=f'http://localhost:47010/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register'
-        response=requests.post(uri,json=data)
-        kubeconfig=json.loads(response.text)
-        kubeconfig=kubeconfig['kubeconfigs'][0]['value']
-        kubeconfig=b64decode(kubeconfig).decode("utf-8")
-        print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
+        value = AuthenticationDetailsValue(token=token)    
+    else :
+        value=None
+        
+    response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
+    p = Process(target=call,args=(install_location,))
+    p.start()
+    data=prepare_clientproxy_data(response)
+    uri=f'http://localhost:47010/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register'
+    response=requests.post(uri,json=data)
+    kubeconfig=json.loads(response.text)
+    kubeconfig=kubeconfig['kubeconfigs'][0]['value']
+    kubeconfig=b64decode(kubeconfig).decode("utf-8")
+    print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
 
 def prepare_clientproxy_data(response):
     data={}
