@@ -1238,7 +1238,7 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     error.status_code = 404  # Make sure CLI returns 3
     raise error
 
-def client_side_proxy(cmd,
+def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
                       cluster_name,
@@ -1247,7 +1247,6 @@ def client_side_proxy(cmd,
                       overwrite_existing=False,
                       context_name=None):
     
-    subscription_id = get_subscription_id(cmd.cli_ctx)
     home_dir = os.environ.get('USERPROFILE')
     install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
     if not os.path.isfile(install_location) :
@@ -1260,22 +1259,12 @@ def client_side_proxy(cmd,
         f=open(install_location,'wb')
         f.write(responseContent)
         f.close()
-    
-    if token is not None:
-        value = AuthenticationDetailsValue(token=token)    
-    else :
-        value=None
         
-    response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
-    p = Process(target=call,args=(install_location,))
-    p.start()
-    data=prepare_clientproxy_data(response)
-    uri=f'http://localhost:47010/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register'
-    response=requests.post(uri,json=data)
-    kubeconfig=json.loads(response.text)
-    kubeconfig=kubeconfig['kubeconfigs'][0]['value']
-    kubeconfig=b64decode(kubeconfig).decode("utf-8")
-    print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
+    expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,install_location,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+
+    while True :
+        if time.time()+300 > expiry :
+            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,install_location,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
 
 def prepare_clientproxy_data(response):
     data={}
@@ -1289,4 +1278,36 @@ def prepare_clientproxy_data(response):
     data['hybridConnectionConfig']['hybridConnectionName']=response.hybrid_connection_config.hybrid_connection_name
     data['hybridConnectionConfig']['token']=response.hybrid_connection_config.token
     data['hybridConnectionConfig']['expiry']=response.hybrid_connection_config.expiration_time
-    return data
+    return data,response.hybrid_connection_config.expiration_time
+
+def client_side_proxy(cmd,
+                      client,
+                      resource_group_name,
+                      cluster_name,
+                      flag,
+                      install_location,
+                      token=None,
+                      path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
+                      overwrite_existing=False,
+                      context_name=None):
+    
+    subscription_id = get_subscription_id(cmd.cli_ctx)
+    if token is not None:
+        value = AuthenticationDetailsValue(token=token)    
+    else :
+        value=None
+    response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
+    if flag==0 :
+        clientproxy_process = Process(target=call,args=(install_location,))
+        clientproxy_process.start()
+    data,expiry=prepare_clientproxy_data(response)
+    uri=f'http://localhost:47010/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register'
+    response=requests.post(uri,json=data)
+    kubeconfig=json.loads(response.text)
+    kubeconfig=kubeconfig['kubeconfigs'][0]['value']
+    kubeconfig=b64decode(kubeconfig).decode("utf-8")
+    if flag==0:
+        print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
+    else :
+        print_or_merge_credentials(path, kubeconfig, True, context_name)
+    return expiry

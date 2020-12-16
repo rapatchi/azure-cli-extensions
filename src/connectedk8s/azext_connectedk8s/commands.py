@@ -24,7 +24,7 @@ def load_command_table(self, _):
         g.custom_command('list', 'list_connectedk8s', table_transformer=connectedk8s_list_table_format)
         g.custom_show_command('show', 'get_connectedk8s', table_transformer=connectedk8s_show_table_format)
         g.custom_command('get-credentials', 'list_cluster_user_credentials')
-        g.custom_command('proxy','client_side_proxy')
+        g.custom_command('proxy','client_side_proxy_wrapper')
         
     with self.command_group('connectedk8s', is_preview=True):
         pass
