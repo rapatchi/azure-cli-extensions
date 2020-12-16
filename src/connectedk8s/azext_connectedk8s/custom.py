@@ -1264,7 +1264,7 @@ def client_side_proxy_wrapper(cmd,
 
     while True :
         if time.time()+300 > expiry :
-            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,install_location,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,install_location,token=token,path=path,overwrite_existing=True,context_name=context_name)
 
 def prepare_clientproxy_data(response):
     data={}
@@ -1306,8 +1306,5 @@ def client_side_proxy(cmd,
     kubeconfig=json.loads(response.text)
     kubeconfig=kubeconfig['kubeconfigs'][0]['value']
     kubeconfig=b64decode(kubeconfig).decode("utf-8")
-    if flag==0:
-        print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
-    else :
-        print_or_merge_credentials(path, kubeconfig, True, context_name)
+    print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
     return expiry
