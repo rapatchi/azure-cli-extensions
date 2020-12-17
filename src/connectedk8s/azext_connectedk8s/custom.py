@@ -1245,12 +1245,17 @@ def client_side_proxy_wrapper(cmd,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
-                      context_name=None):
+                      context_name=None,
+                      config_file_path=None,
+                      debug_mode=False):
     
+    args=[]
+    port=47010
     home_dir = os.environ.get('USERPROFILE')
     install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
+    args.append(install_location)
     if not os.path.isfile(install_location) :
-        response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/arcProxy.exe')
+        response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/arcProxy2.exe')
         responseContent=response.read()
         response.close()
         install_dir=os.path.dirname(install_location)
@@ -1259,12 +1264,25 @@ def client_side_proxy_wrapper(cmd,
         f=open(install_location,'wb')
         f.write(responseContent)
         f.close()
-        
-    expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,install_location,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    
+    if config_file_path is not None :
+        args.append("-c")
+        args.append(config_file_path)
+        config_file=open(config_file_path,'r')
+        config_file_dict=yaml.load(config_file,Loader=yaml.FullLoader)
+        try :
+            port=config_file_dict['server']['httpPort']
+        except :
+            pass
+
+    if debug_mode is True :
+        args.append("-d")
+    
+    expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,port,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
 
     while True :
         if time.time()+300 > expiry :
-            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,install_location,token=token,path=path,overwrite_existing=True,context_name=context_name)
+            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,args,port,token=token,path=path,overwrite_existing=True,context_name=context_name)
 
 def prepare_clientproxy_data(response):
     data={}
@@ -1285,7 +1303,8 @@ def client_side_proxy(cmd,
                       resource_group_name,
                       cluster_name,
                       flag,
-                      install_location,
+                      args,
+                      port,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
@@ -1298,10 +1317,10 @@ def client_side_proxy(cmd,
         value=None
     response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
     if flag==0 :
-        clientproxy_process = Process(target=call,args=(install_location,))
+        clientproxy_process = Process(target=call,args=(args,))
         clientproxy_process.start()
     data,expiry=prepare_clientproxy_data(response)
-    uri=f'http://localhost:47010/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register'
+    uri=f'http://localhost:{port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     response=requests.post(uri,json=data)
     kubeconfig=json.loads(response.text)
     kubeconfig=kubeconfig['kubeconfigs'][0]['value']
