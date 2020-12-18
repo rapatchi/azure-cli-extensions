@@ -34,7 +34,7 @@ from azext_connectedk8s._client_factory import _resource_client_factory
 import azext_connectedk8s._constants as consts
 import azext_connectedk8s._utils as utils
 from multiprocessing import Process
-
+from glob import glob
 from .vendored_sdks.models import ConnectedCluster, ConnectedClusterAADProfile, ConnectedClusterIdentity, AuthenticationDetailsValue
 
 
@@ -1238,6 +1238,7 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     error.status_code = 404  # Make sure CLI returns 3
     raise error
 
+CLIENT_PROXY_VERSION='0.1.0'
 def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
@@ -1252,15 +1253,25 @@ def client_side_proxy_wrapper(cmd,
     args=[]
     port=47010
     home_dir = os.environ.get('USERPROFILE')
-    install_location = os.path.join(home_dir,r'.clientproxy\arcProxy.exe')
+    operating_system=platform.system()
+    install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
+    install_location = os.path.join(home_dir,install_location_string)
     args.append(install_location)
     if not os.path.isfile(install_location) :
-        response=urllib.request.urlopen('https://clientproxy.azureedge.net/temp2/arcProxy2.exe')
+        requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
+        response=urllib.request.urlopen(requestUri)
         responseContent=response.read()
         response.close()
         install_dir=os.path.dirname(install_location)
         if not os.path.exists(install_dir):
             os.makedirs(install_dir)
+        else :
+            older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
+            older_version_string = os.path.join(home_dir,older_version_string)
+            older_version_files=glob(older_version_string)
+            for f in older_version_files:
+                os.remove(f)    
+        
         f=open(install_location,'wb')
         f.write(responseContent)
         f.close()
