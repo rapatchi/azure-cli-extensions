@@ -1252,10 +1252,12 @@ def client_side_proxy_wrapper(cmd,
     
     args=[]
     port=47010
-    home_dir = os.environ.get('USERPROFILE')
     operating_system=platform.system()
     install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
-    install_location = os.path.join(home_dir,install_location_string)
+    if(operating_system=='Windows') :
+        home_dir = os.environ.get('USERPROFILE')
+        install_location = os.path.join(home_dir,install_location_string)
+
     args.append(install_location)
     if not os.path.isfile(install_location) :
         requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
@@ -1266,8 +1268,9 @@ def client_side_proxy_wrapper(cmd,
         if not os.path.exists(install_dir):
             os.makedirs(install_dir)
         else :
-            older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
-            older_version_string = os.path.join(home_dir,older_version_string)
+            if(operating_system=='Windows') :
+                older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
+                older_version_string = os.path.join(home_dir,older_version_string)
             older_version_files=glob(older_version_string)
             for f in older_version_files:
                 os.remove(f)    
