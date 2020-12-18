@@ -1343,6 +1343,7 @@ def client_side_proxy(cmd,
     if flag==0 :
         clientproxy_process = Process(target=call,args=(args,))
         clientproxy_process.start()
+        time.sleep(120)
     data,expiry=prepare_clientproxy_data(response)
     uri=f'http://localhost:{port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     response=requests.post(uri,json=data)
