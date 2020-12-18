@@ -1288,7 +1288,8 @@ def client_side_proxy_wrapper(cmd,
         f=open(install_location,'wb')
         f.write(responseContent)
         f.close()
-    
+        os.chmod(install_location,os.stat(install_location).st_mode | stat.S_IXUSR)
+
     if config_file_path is not None :
         args.append("-c")
         args.append(config_file_path)
