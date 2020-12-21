@@ -20,13 +20,13 @@ class ConnectedCluster(TrackedResource):
 
     All required parameters must be populated in order to send to Azure.
 
-    :ivar id: Fully qualified resource ID for the resource. Ex -
+    :ivar id: Fully qualified resource Id for the resource. Ex -
      /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/{resourceProviderNamespace}/{resourceType}/{resourceName}
     :vartype id: str
     :ivar name: The name of the resource
     :vartype name: str
-    :ivar type: The type of the resource. E.g.
-     "Microsoft.Compute/virtualMachines" or "Microsoft.Storage/storageAccounts"
+    :ivar type: The type of the resource. Ex-
+     Microsoft.Compute/virtualMachines or Microsoft.Storage/storageAccounts.
     :vartype type: str
     :param tags: Resource tags.
     :type tags: dict[str, str]
@@ -34,14 +34,14 @@ class ConnectedCluster(TrackedResource):
     :type location: str
     :param identity: Required. The identity of the connected cluster.
     :type identity:
-     ~azure.mgmt.hybridkubernetes.models.ConnectedClusterIdentity
+     ~azure.mgmt.hybridkubernetes.v2020_01_01_preview.models.ConnectedClusterIdentity
     :param agent_public_key_certificate: Required. Base64 encoded public
      certificate used by the agent to do the initial handshake to the backend
      services in Azure.
     :type agent_public_key_certificate: str
     :param aad_profile: Required. AAD profile of the connected cluster.
     :type aad_profile:
-     ~azure.mgmt.hybridkubernetes.models.ConnectedClusterAADProfile
+     ~azure.mgmt.hybridkubernetes.v2020_01_01_preview.models.ConnectedClusterAADProfile
     :ivar kubernetes_version: The Kubernetes version of the connected cluster
      resource
     :vartype kubernetes_version: str
@@ -58,7 +58,7 @@ class ConnectedCluster(TrackedResource):
      resource. Possible values include: 'Succeeded', 'Failed', 'Canceled',
      'Provisioning', 'Updating', 'Deleting', 'Accepted'
     :type provisioning_state: str or
-     ~azure.mgmt.hybridkubernetes.models.ProvisioningState
+     ~azure.mgmt.hybridkubernetes.v2020_01_01_preview.models.ProvisioningState
     :param distribution: The Kubernetes distribution running on this connected
      cluster.
     :type distribution: str
@@ -77,7 +77,7 @@ class ConnectedCluster(TrackedResource):
      connected cluster. Possible values include: 'Connecting', 'Connected',
      'Offline', 'Expired'
     :type connectivity_status: str or
-     ~azure.mgmt.hybridkubernetes.models.ConnectivityStatus
+     ~azure.mgmt.hybridkubernetes.v2020_01_01_preview.models.ConnectivityStatus
     """
 
     _validation = {

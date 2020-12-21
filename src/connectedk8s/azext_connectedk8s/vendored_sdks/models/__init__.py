@@ -21,12 +21,10 @@ try:
     from .authentication_details_value_py3 import AuthenticationDetailsValue
     from .authentication_details_py3 import AuthenticationDetails
     from .connected_cluster_patch_py3 import ConnectedClusterPatch
-    from .proxy_resource_py3 import ProxyResource
-    from .azure_entity_resource_py3 import AzureEntityResource
     from .resource_py3 import Resource
     from .tracked_resource_py3 import TrackedResource
     from .error_additional_info_py3 import ErrorAdditionalInfo
-    from .error_detail_py3 import ErrorDetail
+    from .error_response_error_py3 import ErrorResponseError
     from .error_response_py3 import ErrorResponse, ErrorResponseException
 except (SyntaxError, ImportError):
     from .operation_display import OperationDisplay
@@ -40,12 +38,10 @@ except (SyntaxError, ImportError):
     from .authentication_details_value import AuthenticationDetailsValue
     from .authentication_details import AuthenticationDetails
     from .connected_cluster_patch import ConnectedClusterPatch
-    from .proxy_resource import ProxyResource
-    from .azure_entity_resource import AzureEntityResource
     from .resource import Resource
     from .tracked_resource import TrackedResource
     from .error_additional_info import ErrorAdditionalInfo
-    from .error_detail import ErrorDetail
+    from .error_response_error import ErrorResponseError
     from .error_response import ErrorResponse, ErrorResponseException
 from .connected_cluster_paged import ConnectedClusterPaged
 from .operation_paged import OperationPaged
@@ -53,6 +49,7 @@ from .connected_kubernetes_client_enums import (
     ResourceIdentityType,
     ProvisioningState,
     ConnectivityStatus,
+    AuthenticationMethod,
 )
 
 __all__ = [
@@ -67,16 +64,15 @@ __all__ = [
     'AuthenticationDetailsValue',
     'AuthenticationDetails',
     'ConnectedClusterPatch',
-    'ProxyResource',
-    'AzureEntityResource',
     'Resource',
     'TrackedResource',
     'ErrorAdditionalInfo',
-    'ErrorDetail',
+    'ErrorResponseError',
     'ErrorResponse', 'ErrorResponseException',
     'ConnectedClusterPaged',
     'OperationPaged',
     'ResourceIdentityType',
     'ProvisioningState',
     'ConnectivityStatus',
+    'AuthenticationMethod',
 ]

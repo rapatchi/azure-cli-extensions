@@ -25,7 +25,7 @@ class AuthenticationDetails(Model):
     :vartype authentication_method: str
     :param value: Required. Authentication token value.
     :type value:
-     ~azure.mgmt.hybridkubernetes.models.AuthenticationDetailsValue
+     ~azure.mgmt.hybridkubernetes.v2020_01_01_preview.models.AuthenticationDetailsValue
     """
 
     _validation = {

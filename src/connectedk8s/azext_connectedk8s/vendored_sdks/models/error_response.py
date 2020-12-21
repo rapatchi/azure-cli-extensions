@@ -14,18 +14,15 @@ from msrest.exceptions import HttpOperationError
 
 
 class ErrorResponse(Model):
-    """Error response.
-
-    Common error response for all Azure Resource Manager APIs to return error
-    details for failed operations. (This also follows the OData error response
-    format.).
+    """The resource management error response.
 
     :param error: The error object.
-    :type error: ~azure.mgmt.hybridkubernetes.models.ErrorDetail
+    :type error:
+     ~azure.mgmt.hybridkubernetes.v2020_01_01_preview.models.ErrorResponseError
     """
 
     _attribute_map = {
-        'error': {'key': 'error', 'type': 'ErrorDetail'},
+        'error': {'key': 'error', 'type': 'ErrorResponseError'},
     }
 
     def __init__(self, **kwargs):
