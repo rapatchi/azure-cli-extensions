@@ -3,6 +3,18 @@
 Release History
 ===============
 
+0.3.5
+++++++
+* Fixed Custom tenant id issue with validation
+
+0.3.4
+++++++
+* Synced with Azure cli-extensions repo
+ 
+0.3.3
+++++++
+* Fixed Custom tenant Id passability
+
 0.3.2
 ++++++
 * Fixed aad server/client app id validation
