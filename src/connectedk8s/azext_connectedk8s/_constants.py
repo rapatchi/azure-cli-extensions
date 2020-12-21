@@ -56,4 +56,11 @@ Get_Credentials_Invoked_Without_Token_For_NON_AAD_Fault_Type = "Get Credentials 
 Cluster_Info_Not_Found_Type = 'Error while finding current cluster server details'
 Deleting_Arc_Agents_With_Proxy_Kubeconfig_Fault_Type = "The arc agents shouldn't be deleted with proxy kubeconfig"
 Incomplete_AAD_Profile_Details_Fault_Type = "AAD client app id or server app id is not provided."
-
+UserProfile_Fault_Type="USERPROFILE environment variable is not set on windows"
+Download_Exe_Fault_Type="Error while downloading client proxy executable from storage account"
+Create_Directory_Fault_Type="Error while creating directory for placing the executable"
+Remove_File_Fault_Type="Error while removing older client proxy executables."
+Open_File_Fault_Type="Error while opening file in read mode"
+Run_Clientproxy_Fault_Type="Error while starting client proxy process."
+Post_Hybridconn_Fault_Type="Error while posting hybrid connection details to proxy process"
+Merge_Kubeconfig_Fault_Type="Error while merging kubeconfig."

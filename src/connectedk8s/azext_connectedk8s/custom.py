@@ -1253,62 +1253,113 @@ def client_side_proxy_wrapper(cmd,
     args=[]
     port=47010
     operating_system=platform.system()
+
+    ##Creating installation location depending on OS
     if(operating_system=='Windows') :
         home_dir = os.environ.get('USERPROFILE')
+
+        if not home_dir:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception='USERPROFILE not provided on windows', fault_type=consts.UserProfile_Fault_Type,
+                                summary='Please provide USERPROFILE environment variable as installation location on windows')
+            raise CLIError('In the Windows platform, please specify the environment variable "USERPROFILE" '
+                           'as the installation location.')
+        
         install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
         install_location = os.path.join(home_dir,install_location_string)
+    
     elif(operating_system=='Linux') :
         install_location_string=f'bin/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         install_location = os.path.expanduser(os.path.join('~', install_location_string))
     
     args.append(install_location)
+    
+    ##If version specified by install location doesnt exist, then download the executable
     if not os.path.isfile(install_location) :
+        
+        ##Creating request uri for downloading the executable
         if(operating_system=='Windows') :
             requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
+        
         elif(operating_system=='Linux') :
             requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         
-        response=urllib.request.urlopen(requestUri)
+        ##Downloading the executable
+        try :
+            response=urllib.request.urlopen(requestUri)
+        except Exception as e :
+            telemetry.set_exception(exception=e, fault_type=consts.Download_Exe_Fault_Type,
+                                    summary='Unable to download clientproxy executable.')
+            raise CLIError("Failed to download executable with client. Please check your internet connection." + str(e))
+        
         responseContent=response.read()
         response.close()
         install_dir=os.path.dirname(install_location)
+
+        ##Creating the .clientproxy folder on Windows and bin folder on Linux, if it doesnt exist
         if not os.path.exists(install_dir):
-            os.makedirs(install_dir)
-        else :
+            try:
+                os.makedirs(install_dir)
+            except Exception as e:
+                telemetry.set_exception(exception=e, fault_type=consts.Create_Directory_Fault_Type,
+                                    summary='Unable to create installation directory')
+                raise CLIError("Failed to create installation directory." + str(e))
+        else :    
             if(operating_system=='Windows') :
                 older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
                 older_version_string = os.path.join(home_dir,older_version_string)
+            
             elif(operating_system=='Linux') :
                 older_version_string=f'bin/arcProxy{operating_system}*'
                 older_version_string = os.path.expanduser(os.path.join('~', older_version_string))
+            
             older_version_files=glob(older_version_string)
+            
+            ##Removing older executables from the directory
             for f in older_version_files:
-                os.remove(f)    
+                try :
+                    os.remove(f)
+                except Exception as e:
+                    telemetry.set_exception(exception=e, fault_type=consts.Remove_File_Fault_Type,
+                                    summary='Unable to remove older version files')
+                    raise CLIError("Failed to remove older version files." + str(e))
         
         f=open(install_location,'wb')
         f.write(responseContent)
         f.close()
         os.chmod(install_location,os.stat(install_location).st_mode | stat.S_IXUSR)
 
+    ##Reading client proxy port from config file, if specified.
     if config_file_path is not None :
         args.append("-c")
         args.append(config_file_path)
-        config_file=open(config_file_path,'r')
+        
+        try :
+            config_file=open(config_file_path,'r')
+        except Exception as e:
+            telemetry.set_user_fault()
+            telemetry.set_exception(exception=e, fault_type=consts.Open_File_Fault_Type,
+                                    summary='Unable to read config file')
+            raise CLIError("Failed to open config file." + str(e))
+        
         config_file_dict=yaml.load(config_file,Loader=yaml.FullLoader)
+        
         try :
             port=config_file_dict['server']['httpPort']
         except :
-            pass
+            logger.warning("httpPort not found in config file.Proceeding on default port 47010.")
 
     if debug_mode is True :
         args.append("-d")
     
-    expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,port,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
 
+    ##Loop for fetching new hybrid connection details, 5 mins before expiry
     while True :
         if time.time()+300 > expiry :
-            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,args,port,token=token,path=path,overwrite_existing=True,context_name=context_name)
+            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,args,port,operating_system,token=token,path=path,overwrite_existing=True,context_name=context_name)
 
+##Prepare data as needed by client proxy executable
 def prepare_clientproxy_data(response):
     data={}
     data['kubeconfigs']=[]
@@ -1330,26 +1381,66 @@ def client_side_proxy(cmd,
                       flag,
                       args,
                       port,
+                      operating_system,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
                       context_name=None):
     
+    send_cloud_telemetry(cmd)
     subscription_id = get_subscription_id(cmd.cli_ctx)
+    
     if token is not None:
-        value = AuthenticationDetailsValue(token=token)    
+        value = AuthenticationDetailsValue(token=token)
+        telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.IsAADEnabled': False})    
     else :
         value=None
-    response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
+        telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.IsAADEnabled': True})
+    
+    ##Fetching hybrid connection details from Userrp
+    try :
+        response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
+    except Exception as e:
+        telemetry.set_exception(exception=e, fault_type=consts.Get_Credentials_Failed_Fault_Type,
+                                summary='Unable to list cluster user credentials')
+        raise CLIError("Failed to get credentials." + str(e))
+    
+    ##Starting the client proxy process, if this is the first time that this function is invoked
     if flag==0 :
         clientproxy_process = Process(target=call,args=(args,))
-        clientproxy_process.start()
-        time.sleep(20)
+        try :
+            clientproxy_process.start()
+        except Exception as e:
+            telemetry.set_exception(exception=e, fault_type=consts.Run_Clientproxy_Fault_Type,
+                                summary='Unable to run client proxy executable')
+            raise CLIError("Failed to start proxy process." + str(e))
+        
+        ##Proxy takes some seconds to start on linux. So adding a delay here.
+        if(operating_system=='Linux') :
+            time.sleep(20)
+    
     data,expiry=prepare_clientproxy_data(response)
     uri=f'http://localhost:{port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
-    response=requests.post(uri,json=data)
+    
+    ##Posting hybrid connection details to proxy in order to get kubeconfig
+    try :
+        response=requests.post(uri,json=data)
+    except Exception as e:
+        telemetry.set_exception(exception=e, fault_type=consts.Post_Hybridconn_Fault_Type,
+                                summary='Unable to post hybrid connection details to clientproxy')
+        raise CLIError("Failed to pass hybrid connection details to proxy." + str(e))
+    
+    ##Decoding kubeconfig into a string
     kubeconfig=json.loads(response.text)
     kubeconfig=kubeconfig['kubeconfigs'][0]['value']
     kubeconfig=b64decode(kubeconfig).decode("utf-8")
-    print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
+    
+    try:
+        print_or_merge_credentials(path, kubeconfig, overwrite_existing, context_name)
+
+    except Exception as e:
+        telemetry.set_exception(exception=e, fault_type=consts.Merge_Kubeconfig_Fault_Type,
+                                summary='Unable to merge kubeconfig.')
+        raise CLIError("Failed to merge kubeconfig." + str(e))
+    
     return expiry
