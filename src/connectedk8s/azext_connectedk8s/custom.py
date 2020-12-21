@@ -1272,6 +1272,12 @@ def client_side_proxy_wrapper(cmd,
         install_location_string=f'bin/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         install_location = os.path.expanduser(os.path.join('~', install_location_string))
     
+    else :
+        telemetry.set_user_fault()
+        telemetry.set_exception(exception='Unsupported OS', fault_type=consts.Unsupported_Fault_Type,
+                            summary=f'{operating_system} is not supported yet')
+        raise CLIError(f'The {operating_system} platform is not currently supported.')
+    
     args.append(install_location)
     
     ##If version specified by install location doesnt exist, then download the executable
