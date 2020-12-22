@@ -1402,28 +1402,18 @@ def client_side_proxy_wrapper(cmd,
 
     ##Creating installation location depending on OS
     if(operating_system=='Windows') :
-        home_dir = os.environ.get('USERPROFILE')
-
-        if not home_dir:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception='USERPROFILE not provided on windows', fault_type=consts.UserProfile_Fault_Type,
-                                summary='Please provide USERPROFILE environment variable as installation location on windows')
-            raise CLIError('In the Windows platform, please specify the environment variable "USERPROFILE" '
-                           'as the installation location.')
-        
         install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
-        install_location = os.path.join(home_dir,install_location_string)
     
     elif(operating_system=='Linux') :
-        install_location_string=f'bin/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
-        install_location = os.path.expanduser(os.path.join('~', install_location_string))
-    
+        install_location_string=f'.clientproxy/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
+        
     else :
         telemetry.set_user_fault()
         telemetry.set_exception(exception='Unsupported OS', fault_type=consts.Unsupported_Fault_Type,
                             summary=f'{operating_system} is not supported yet')
         raise CLIError(f'The {operating_system} platform is not currently supported.')
     
+    install_location = os.path.expanduser(os.path.join('~', install_location_string))
     args.append(install_location)
     
     ##If version specified by install location doesnt exist, then download the executable
@@ -1448,7 +1438,7 @@ def client_side_proxy_wrapper(cmd,
         response.close()
         install_dir=os.path.dirname(install_location)
 
-        ##Creating the .clientproxy folder on Windows and bin folder on Linux, if it doesnt exist
+        ##Creating the .clientproxy folder if it doesnt exist
         if not os.path.exists(install_dir):
             try:
                 os.makedirs(install_dir)
@@ -1459,12 +1449,11 @@ def client_side_proxy_wrapper(cmd,
         else :    
             if(operating_system=='Windows') :
                 older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
-                older_version_string = os.path.join(home_dir,older_version_string)
-            
+
             elif(operating_system=='Linux') :
-                older_version_string=f'bin/arcProxy{operating_system}*'
-                older_version_string = os.path.expanduser(os.path.join('~', older_version_string))
-            
+                older_version_string=f'.clientproxy/arcProxy{operating_system}*'
+
+            older_version_string = os.path.expanduser(os.path.join('~', older_version_string))
             older_version_files=glob(older_version_string)
             
             ##Removing older executables from the directory
