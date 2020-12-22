@@ -1457,9 +1457,9 @@ def client_side_proxy_wrapper(cmd,
                                     summary='Unable to remove older version files')
                     raise CLIError("Failed to remove older version files." + str(e))
         
-        f=open(install_location,'wb')
-        f.write(responseContent)
-        f.close()
+        with open(install_location,'wb') as f :
+            f.write(responseContent)
+        
         os.chmod(install_location,os.stat(install_location).st_mode | stat.S_IXUSR)
 
     ##Reading client proxy port from config file, if specified.
