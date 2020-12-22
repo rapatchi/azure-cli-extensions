@@ -1483,12 +1483,8 @@ def client_side_proxy_wrapper(cmd,
     if debug_mode is True :
         args.append("-d")
     
-    expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
 
-    ##Loop for fetching new hybrid connection details, 5 mins before expiry
-    while True :
-        if time.time()+300 > expiry :
-            expiry=client_side_proxy(cmd,client,resource_group_name,cluster_name,1,args,port,operating_system,token=token,path=path,overwrite_existing=True,context_name=context_name)
 
 ##Prepare data as needed by client proxy executable
 def prepare_clientproxy_data(response):
@@ -1551,6 +1547,12 @@ def client_side_proxy(cmd,
             time.sleep(20)
     
     data=prepare_clientproxy_data(response)
+    expiry=data['hybridConnectionConfig']['expiry']
+
+    ##Starting a timer to refresh the credentials, 5 mins before expiry
+    fun_args=[cmd,client,resource_group_name,cluster_name,1,args,port,operating_system,token,path,overwrite_existing,context_name]
+    Timer(expiry-time.time()-300,client_side_proxy,args=fun_args).start()
+
     uri=f'http://localhost:{port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     
     ##Posting hybrid connection details to proxy in order to get kubeconfig
@@ -1574,4 +1576,3 @@ def client_side_proxy(cmd,
                                 summary='Unable to merge kubeconfig.')
         raise CLIError("Failed to merge kubeconfig." + str(e))
     
-    return data['hybridConnectionConfig']['expiry']
