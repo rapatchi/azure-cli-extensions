@@ -33,10 +33,9 @@ from azext_connectedk8s._client_factory import cf_resource_groups
 from azext_connectedk8s._client_factory import _resource_client_factory
 import azext_connectedk8s._constants as consts
 import azext_connectedk8s._utils as utils
-from multiprocessing import Process
 from glob import glob
 from .vendored_sdks.models import ConnectedCluster, ConnectedClusterAADProfile, ConnectedClusterIdentity, AuthenticationDetailsValue
-
+from threading import Timer,Thread
 
 logger = get_logger(__name__)
 
@@ -1403,10 +1402,14 @@ def client_side_proxy_wrapper(cmd,
     ##Creating installation location depending on OS
     if(operating_system=='Windows') :
         install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
+        requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
+        older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
     
     elif(operating_system=='Linux') :
         install_location_string=f'.clientproxy/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
-        
+        requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
+        older_version_string=f'.clientproxy/arcProxy{operating_system}*'
+
     else :
         telemetry.set_user_fault()
         telemetry.set_exception(exception='Unsupported OS', fault_type=consts.Unsupported_Fault_Type,
@@ -1418,13 +1421,6 @@ def client_side_proxy_wrapper(cmd,
     
     ##If version specified by install location doesnt exist, then download the executable
     if not os.path.isfile(install_location) :
-        
-        ##Creating request uri for downloading the executable
-        if(operating_system=='Windows') :
-            requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
-        
-        elif(operating_system=='Linux') :
-            requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         
         ##Downloading the executable
         try :
@@ -1447,12 +1443,6 @@ def client_side_proxy_wrapper(cmd,
                                     summary='Unable to create installation directory')
                 raise CLIError("Failed to create installation directory." + str(e))
         else :    
-            if(operating_system=='Windows') :
-                older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
-
-            elif(operating_system=='Linux') :
-                older_version_string=f'.clientproxy/arcProxy{operating_system}*'
-
             older_version_string = os.path.expanduser(os.path.join('~', older_version_string))
             older_version_files=glob(older_version_string)
             
@@ -1513,7 +1503,7 @@ def prepare_clientproxy_data(response):
     data['hybridConnectionConfig']['hybridConnectionName']=response.hybrid_connection_config.hybrid_connection_name
     data['hybridConnectionConfig']['token']=response.hybrid_connection_config.token
     data['hybridConnectionConfig']['expiry']=response.hybrid_connection_config.expiration_time
-    return data,response.hybrid_connection_config.expiration_time
+    return data
 
 def client_side_proxy(cmd,
                       client,
@@ -1548,7 +1538,7 @@ def client_side_proxy(cmd,
     
     ##Starting the client proxy process, if this is the first time that this function is invoked
     if flag==0 :
-        clientproxy_process = Process(target=call,args=(args,))
+        clientproxy_process = Thread(target=call,args=(args,))
         try :
             clientproxy_process.start()
         except Exception as e:
@@ -1560,7 +1550,7 @@ def client_side_proxy(cmd,
         if(operating_system=='Linux') :
             time.sleep(20)
     
-    data,expiry=prepare_clientproxy_data(response)
+    data=prepare_clientproxy_data(response)
     uri=f'http://localhost:{port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     
     ##Posting hybrid connection details to proxy in order to get kubeconfig
@@ -1584,4 +1574,4 @@ def client_side_proxy(cmd,
                                 summary='Unable to merge kubeconfig.')
         raise CLIError("Failed to merge kubeconfig." + str(e))
     
-    return expiry
+    return data['hybridConnectionConfig']['expiry']
