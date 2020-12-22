@@ -1395,6 +1395,7 @@ def client_side_proxy_wrapper(cmd,
                       config_file_path=None,
                       debug_mode=False):
     
+    send_cloud_telemetry(cmd)
     args=[]
     port=47010
     operating_system=platform.system()
@@ -1411,7 +1412,6 @@ def client_side_proxy_wrapper(cmd,
         older_version_string=f'.clientproxy/arcProxy{operating_system}*'
 
     else :
-        telemetry.set_user_fault()
         telemetry.set_exception(exception='Unsupported OS', fault_type=consts.Unsupported_Fault_Type,
                             summary=f'{operating_system} is not supported yet')
         raise CLIError(f'The {operating_system} platform is not currently supported.')
@@ -1439,6 +1439,7 @@ def client_side_proxy_wrapper(cmd,
             try:
                 os.makedirs(install_dir)
             except Exception as e:
+                telemetry.set_user_fault()
                 telemetry.set_exception(exception=e, fault_type=consts.Create_Directory_Fault_Type,
                                     summary='Unable to create installation directory')
                 raise CLIError("Failed to create installation directory." + str(e))
@@ -1451,6 +1452,7 @@ def client_side_proxy_wrapper(cmd,
                 try :
                     os.remove(f)
                 except Exception as e:
+                    telemetry.set_user_fault()
                     telemetry.set_exception(exception=e, fault_type=consts.Remove_File_Fault_Type,
                                     summary='Unable to remove older version files')
                     raise CLIError("Failed to remove older version files." + str(e))
@@ -1514,7 +1516,6 @@ def client_side_proxy(cmd,
                       overwrite_existing=False,
                       context_name=None):
     
-    send_cloud_telemetry(cmd)
     subscription_id = get_subscription_id(cmd.cli_ctx)
     
     if token is not None:
