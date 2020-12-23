@@ -1384,6 +1384,8 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
     raise error
 
 CLIENT_PROXY_VERSION='0.1.0'
+API_SERVER_PORT=47011
+CLIENT_PROXY_PORT=47010
 def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
@@ -1392,15 +1394,14 @@ def client_side_proxy_wrapper(cmd,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
                       context_name=None,
-                      config_file_path=None,
-                      debug_mode=False):
+                      api_server_port=API_SERVER_PORT,
+                      client_proxy_port=CLIENT_PROXY_PORT):
     
     send_cloud_telemetry(cmd)
     args=[]
-    port=47010
     operating_system=platform.system()
 
-    ##Creating installation location depending on OS
+    ##Creating installation location, request uri and older version exe location depending on OS
     if(operating_system=='Windows') :
         install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
         requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
@@ -1418,7 +1419,8 @@ def client_side_proxy_wrapper(cmd,
     
     install_location = os.path.expanduser(os.path.join('~', install_location_string))
     args.append(install_location)
-    
+    install_dir=os.path.dirname(install_location)
+
     ##If version specified by install location doesnt exist, then download the executable
     if not os.path.isfile(install_location) :
         
@@ -1432,7 +1434,6 @@ def client_side_proxy_wrapper(cmd,
         
         responseContent=response.read()
         response.close()
-        install_dir=os.path.dirname(install_location)
 
         ##Creating the .clientproxy folder if it doesnt exist
         if not os.path.exists(install_dir):
@@ -1462,30 +1463,24 @@ def client_side_proxy_wrapper(cmd,
         
         os.chmod(install_location,os.stat(install_location).st_mode | stat.S_IXUSR)
 
-    ##Reading client proxy port from config file, if specified.
-    if config_file_path is not None :
-        args.append("-c")
-        args.append(config_file_path)
-        
-        try :
-            config_file=open(config_file_path,'r')
-        except Exception as e:
-            telemetry.set_user_fault()
-            telemetry.set_exception(exception=e, fault_type=consts.Open_File_Fault_Type,
-                                    summary='Unable to read config file')
-            raise CLIError("Failed to open config file." + str(e))
-        
-        config_file_dict=yaml.load(config_file,Loader=yaml.FullLoader)
-        
-        try :
-            port=config_file_dict['server']['httpPort']
-        except :
-            logger.warning("httpPort not found in config file.Proceeding on default port 47010.")
+    ##Writing configuration in yaml file if port override is specified from command line
+    if(api_server_port!=API_SERVER_PORT or client_proxy_port!=CLIENT_PROXY_PORT) :
+        config_file_location=os.path.join(install_dir, 'config.yml')
 
-    if debug_mode is True :
+        if os.path.isfile(config_file_location) :
+            os.remove(config_file_location)
+
+        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)}}
+        with open(config_file_location,'w') as f:
+            yaml.dump(dict_file,f,default_flow_style=False)
+        
+        args.append("-c")
+        args.append(config_file_location)
+        
+    if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
     
-    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
 
 
 ##Prepare data as needed by client proxy executable
@@ -1509,7 +1504,7 @@ def client_side_proxy(cmd,
                       cluster_name,
                       flag,
                       args,
-                      port,
+                      client_proxy_port,
                       operating_system,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
@@ -1551,10 +1546,10 @@ def client_side_proxy(cmd,
     expiry=data['hybridConnectionConfig']['expiry']
 
     ##Starting a timer to refresh the credentials, 5 mins before expiry
-    fun_args=[cmd,client,resource_group_name,cluster_name,1,args,port,operating_system,token,path,overwrite_existing,context_name]
+    fun_args=[cmd,client,resource_group_name,cluster_name,1,args,client_proxy_port,operating_system,token,path,overwrite_existing,context_name]
     Timer(expiry-time.time()-300,client_side_proxy,args=fun_args).start()
 
-    uri=f'http://localhost:{port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
+    uri=f'http://localhost:{client_proxy_port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     
     ##Posting hybrid connection details to proxy in order to get kubeconfig
     try :
