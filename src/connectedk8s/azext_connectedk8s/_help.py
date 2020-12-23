@@ -73,3 +73,11 @@ helps['connectedk8s get-credentials'] = """
   - name: Get access credentials for a connected kubernetes cluster
     text: az connectedk8s get-credentials -g resourceGroupName -n connectedClusterName
 """
+
+helps['connectedk8s proxy'] = """
+  type: command
+  short-summary: Get access credentials for a connected kubernetes cluster.
+  examples:
+  - name: Get access credentials for a connected kubernetes cluster
+    text: az connectedk8s proxy -n clusterName -g resourceGroupName
+"""
