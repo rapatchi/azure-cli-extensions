@@ -1536,9 +1536,9 @@ def client_side_proxy(cmd,
                                 summary='Unable to run client proxy executable')
             raise CLIError("Failed to start proxy process." + str(e))
         
-        ##Proxy takes some seconds to start on linux. So adding a delay here.
-        if(operating_system=='Linux') :
-            time.sleep(20)
+        ##Waiting till the proxy process starts up
+        while not clientproxy_process.is_alive() :
+            pass
     
     data=prepare_clientproxy_data(response)
     expiry=data['hybridConnectionConfig']['expiry']
