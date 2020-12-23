@@ -1452,11 +1452,8 @@ def client_side_proxy_wrapper(cmd,
             for f in older_version_files:
                 try :
                     os.remove(f)
-                except Exception as e:
-                    telemetry.set_user_fault()
-                    telemetry.set_exception(exception=e, fault_type=consts.Remove_File_Fault_Type,
-                                    summary='Unable to remove older version files')
-                    raise CLIError("Failed to remove older version files." + str(e))
+                except :
+                    logger.warning("Failed to remove older version files")
         
         with open(install_location,'wb') as f :
             f.write(responseContent)
