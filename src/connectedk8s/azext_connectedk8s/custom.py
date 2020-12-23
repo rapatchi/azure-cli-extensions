@@ -36,9 +36,10 @@ import azext_connectedk8s._utils as utils
 from glob import glob
 from .vendored_sdks.models import ConnectedCluster, ConnectedClusterAADProfile, ConnectedClusterIdentity, AuthenticationDetailsValue
 from threading import Timer,Thread
-
+from sys import exit
 logger = get_logger(__name__)
-
+from _thread import interrupt_main 
+from threading import active_count
 # pylint:disable=unused-argument
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-branches
@@ -1453,7 +1454,7 @@ def client_side_proxy_wrapper(cmd,
                 try :
                     os.remove(f)
                 except :
-                    logger.warning("Failed to remove older version files")
+                    logger.warning("failed to delete older version files")
         
         with open(install_location,'wb') as f :
             f.write(responseContent)
@@ -1477,8 +1478,9 @@ def client_side_proxy_wrapper(cmd,
     if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
     
-    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
-
+    client_proxy_thread=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    check_clientproxy_thread(client_proxy_thread)
+    
 
 ##Prepare data as needed by client proxy executable
 def prepare_clientproxy_data(response):
@@ -1509,7 +1511,6 @@ def client_side_proxy(cmd,
                       context_name=None):
     
     subscription_id = get_subscription_id(cmd.cli_ctx)
-    
     if token is not None:
         value = AuthenticationDetailsValue(token=token)
         telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.IsAADEnabled': False})    
@@ -1544,7 +1545,9 @@ def client_side_proxy(cmd,
 
     ##Starting a timer to refresh the credentials, 5 mins before expiry
     fun_args=[cmd,client,resource_group_name,cluster_name,1,args,client_proxy_port,operating_system,token,path,overwrite_existing,context_name]
-    Timer(expiry-time.time()-300,client_side_proxy,args=fun_args).start()
+    refresh_thread=Timer(expiry-time.time()-11000,client_side_proxy,args=fun_args)
+    refresh_thread.setDaemon(True)
+    refresh_thread.start()
 
     uri=f'http://localhost:{client_proxy_port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     
@@ -1569,3 +1572,15 @@ def client_side_proxy(cmd,
                                 summary='Unable to merge kubeconfig.')
         raise CLIError("Failed to merge kubeconfig." + str(e))
     
+    if flag==0 :
+        return clientproxy_process
+
+
+def check_clientproxy_thread(client_proxy_thread) :
+    if not client_proxy_thread.isAlive() :
+        interrupt_main()
+    else :
+        process_check_thread=Timer(60,check_clientproxy_thread,args=[client_proxy_thread])
+        process_check_thread.setDaemon(True)
+        process_check_thread.start()
+        
