@@ -1545,7 +1545,7 @@ def client_side_proxy(cmd,
 
     ##Starting a timer to refresh the credentials, 5 mins before expiry
     fun_args=[cmd,client,resource_group_name,cluster_name,1,args,client_proxy_port,operating_system,token,path,overwrite_existing,context_name]
-    refresh_thread=Timer(expiry-time.time()-11000,client_side_proxy,args=fun_args)
+    refresh_thread=Timer(expiry-time.time()-300,client_side_proxy,args=fun_args)
     refresh_thread.setDaemon(True)
     refresh_thread.start()
 
@@ -1577,7 +1577,7 @@ def client_side_proxy(cmd,
 
 
 def check_clientproxy_thread(client_proxy_thread) :
-    if not client_proxy_thread.isAlive() :
+    if not client_proxy_thread.is_alive() :
         interrupt_main()
     else :
         process_check_thread=Timer(60,check_clientproxy_thread,args=[client_proxy_thread])
