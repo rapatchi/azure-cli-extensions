@@ -1478,8 +1478,7 @@ def client_side_proxy_wrapper(cmd,
     if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
     
-    client_proxy_thread=client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
-    check_clientproxy_thread(client_proxy_thread)
+    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
     
 
 ##Prepare data as needed by client proxy executable
@@ -1572,15 +1571,6 @@ def client_side_proxy(cmd,
                                 summary='Unable to merge kubeconfig.')
         raise CLIError("Failed to merge kubeconfig." + str(e))
     
-    if flag==0 :
-        return clientproxy_process
 
 
-def check_clientproxy_thread(client_proxy_thread) :
-    if not client_proxy_thread.is_alive() :
-        interrupt_main()
-    else :
-        process_check_thread=Timer(60,check_clientproxy_thread,args=[client_proxy_thread])
-        process_check_thread.setDaemon(True)
-        process_check_thread.start()
         
