@@ -1408,7 +1408,7 @@ def client_side_proxy_wrapper(cmd,
         requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
         older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
     
-    elif(operating_system=='Linux') :
+    elif(operating_system=='Linux' or operating_system=='Darwin') :
         install_location_string=f'.clientproxy/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         older_version_string=f'.clientproxy/arcProxy{operating_system}*'
@@ -1536,7 +1536,7 @@ def client_side_proxy(cmd,
             raise CLIError("Failed to start proxy process." + str(e))
         
         ##Proxy takes some time to start on linux, so adding a delay here.
-        if operating_system=='Linux':
+        if operating_system=='Linux' or operating_system=='Darwin':
             time.sleep(10)
     
     data=prepare_clientproxy_data(response)
