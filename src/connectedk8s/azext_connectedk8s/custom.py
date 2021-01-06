@@ -1493,7 +1493,7 @@ def prepare_clientproxy_data(response):
     data['hybridConnectionConfig']['relay']=response.hybrid_connection_config.relay
     data['hybridConnectionConfig']['hybridConnectionName']=response.hybrid_connection_config.hybrid_connection_name
     data['hybridConnectionConfig']['token']=response.hybrid_connection_config.token
-    data['hybridConnectionConfig']['expiry']=response.hybrid_connection_config.expiration_time
+    data['hybridConnectionConfig']['expirationTime']=response.hybrid_connection_config.expiration_time
     return data
 
 def client_side_proxy(cmd,
@@ -1540,7 +1540,7 @@ def client_side_proxy(cmd,
             time.sleep(10)
     
     data=prepare_clientproxy_data(response)
-    expiry=data['hybridConnectionConfig']['expiry']
+    expiry=data['hybridConnectionConfig']['expirationTime']
 
     ##Starting a timer to refresh the credentials, 5 mins before expiry
     fun_args=[cmd,client,resource_group_name,cluster_name,1,args,client_proxy_port,operating_system,token,path,overwrite_existing,context_name]
