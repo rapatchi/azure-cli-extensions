@@ -1386,7 +1386,6 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
 
 CLIENT_PROXY_VERSION='0.1.0'
 API_SERVER_PORT=47011
-CLIENT_PROXY_PORT=47010
 def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
@@ -1395,8 +1394,7 @@ def client_side_proxy_wrapper(cmd,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
                       context_name=None,
-                      api_server_port=API_SERVER_PORT,
-                      client_proxy_port=CLIENT_PROXY_PORT):
+                      api_server_port=API_SERVER_PORT):
     
     send_cloud_telemetry(cmd)
     args=[]
@@ -1462,13 +1460,13 @@ def client_side_proxy_wrapper(cmd,
         os.chmod(install_location,os.stat(install_location).st_mode | stat.S_IXUSR)
 
     ##Writing configuration in yaml file if port override is specified from command line
-    if(api_server_port!=API_SERVER_PORT or client_proxy_port!=CLIENT_PROXY_PORT) :
+    if(api_server_port!=API_SERVER_PORT) :
         config_file_location=os.path.join(install_dir, 'config.yml')
 
         if os.path.isfile(config_file_location) :
             os.remove(config_file_location)
 
-        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)}}
+        dict_file={'server':{'httpsPort':int(api_server_port)}}
         with open(config_file_location,'w') as f:
             yaml.dump(dict_file,f,default_flow_style=False)
         
@@ -1478,7 +1476,7 @@ def client_side_proxy_wrapper(cmd,
     if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
     
-    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,api_server_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
     
 
 ##Prepare data as needed by client proxy executable
@@ -1502,7 +1500,7 @@ def client_side_proxy(cmd,
                       cluster_name,
                       flag,
                       args,
-                      client_proxy_port,
+                      api_server_port,
                       operating_system,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
@@ -1543,16 +1541,16 @@ def client_side_proxy(cmd,
     expiry=data['hybridConnectionConfig']['expirationTime']
 
     ##Starting a timer to refresh the credentials, 5 mins before expiry
-    fun_args=[cmd,client,resource_group_name,cluster_name,1,args,client_proxy_port,operating_system,token,path,overwrite_existing,context_name]
+    fun_args=[cmd,client,resource_group_name,cluster_name,1,args,api_server_port,operating_system,token,path,overwrite_existing,context_name]
     refresh_thread=Timer(expiry-time.time()-300,client_side_proxy,args=fun_args)
     refresh_thread.setDaemon(True)
     refresh_thread.start()
 
-    uri=f'http://localhost:{client_proxy_port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
+    uri=f'https://localhost:{api_server_port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     
     ##Posting hybrid connection details to proxy in order to get kubeconfig
     try :
-        response=requests.post(uri,json=data)
+        response=requests.post(uri,json=data,verify=False)
     except Exception as e:
         telemetry.set_exception(exception=e, fault_type=consts.Post_Hybridconn_Fault_Type,
                                 summary='Unable to post hybrid connection details to clientproxy')
