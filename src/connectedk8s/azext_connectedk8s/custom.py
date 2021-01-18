@@ -21,6 +21,7 @@ from knack.log import get_logger
 from knack.prompting import prompt_y_n
 from knack.prompting import NoTTYException
 from azure.cli.core.commands.client_factory import get_subscription_id
+from azure.cli.core._profile import Profile
 from azure.cli.core.util import sdk_no_wait
 from azure.cli.core import telemetry
 from msrestazure.azure_exceptions import CloudError
@@ -1401,6 +1402,11 @@ def client_side_proxy_wrapper(cmd,
     send_cloud_telemetry(cmd)
     args=[]
     operating_system=platform.system()
+
+    ##Identifying type of logged in entity
+    subscription_id = get_subscription_id(cmd.cli_ctx)
+    account=Profile().get_subscription(subscription_id)
+    user_type=account['user']['type']
 
     ##Creating installation location, request uri and older version exe location depending on OS
     if(operating_system=='Windows') :
