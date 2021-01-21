@@ -21,6 +21,7 @@ from knack.log import get_logger
 from knack.prompting import prompt_y_n
 from knack.prompting import NoTTYException
 from azure.cli.core.commands.client_factory import get_subscription_id
+from azure.cli.core._profile import Profile
 from azure.cli.core.util import sdk_no_wait
 from azure.cli.core import telemetry
 from msrestazure.azure_exceptions import CloudError
@@ -1387,6 +1388,7 @@ def _resolve_service_principal(client, identifier):  # Uses service principal gr
 CLIENT_PROXY_VERSION='0.1.0'
 API_SERVER_PORT=47011
 CLIENT_PROXY_PORT=47010
+CLIENTPROXY_CLIENT_ID='04b07795-8ddb-461a-bbee-02f9e1bf7b46'
 def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
@@ -1398,7 +1400,7 @@ def client_side_proxy_wrapper(cmd,
                       api_server_port=API_SERVER_PORT,
                       client_proxy_port=CLIENT_PROXY_PORT):
     
-    send_cloud_telemetry(cmd)
+    cloud=send_cloud_telemetry(cmd)
     args=[]
     operating_system=platform.system()
 
@@ -1407,11 +1409,13 @@ def client_side_proxy_wrapper(cmd,
         install_location_string=f'.clientproxy\\arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
         requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}.exe'
         older_version_string=f'.clientproxy\\arcProxy{operating_system}*.exe'
+        creds_string=r'.azure\accessTokens.json'
     
     elif(operating_system=='Linux' or operating_system=='Darwin') :
         install_location_string=f'.clientproxy/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         requestUri=f'https://clientproxy.azureedge.net/release20201218/arcProxy{operating_system}{CLIENT_PROXY_VERSION}'
         older_version_string=f'.clientproxy/arcProxy{operating_system}*'
+        creds_string=r'.azure/accessTokens.json'
 
     else :
         telemetry.set_exception(exception='Unsupported OS', fault_type=consts.Unsupported_Fault_Type,
@@ -1461,24 +1465,66 @@ def client_side_proxy_wrapper(cmd,
         
         os.chmod(install_location,os.stat(install_location).st_mode | stat.S_IXUSR)
 
-    ##Writing configuration in yaml file if port override is specified from command line
-    if(api_server_port!=API_SERVER_PORT or client_proxy_port!=CLIENT_PROXY_PORT) :
-        config_file_location=os.path.join(install_dir, 'config.yml')
+    ##Creating config file to pass config to clientproxy
+    config_file_location=os.path.join(install_dir, 'config.yml')
 
-        if os.path.isfile(config_file_location) :
-            os.remove(config_file_location)
+    if os.path.isfile(config_file_location) :
+        os.remove(config_file_location)
 
-        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)}}
-        with open(config_file_location,'w') as f:
-            yaml.dump(dict_file,f,default_flow_style=False)
-        
-        args.append("-c")
-        args.append(config_file_location)
-        
+    ##Identifying type of logged in entity
+    account = get_subscription_id(cmd.cli_ctx)
+    account=Profile().get_subscription(account)
+    user_type=account['user']['type']
+
+    tenantId=_graph_client_factory(cmd.cli_ctx).config.tenant_id
+    
+    if user_type=='user':
+        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)},'identity':{'tenantID':tenantId,'clientID':CLIENTPROXY_CLIENT_ID}}
+    else :
+        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)},'identity':{'tenantID':tenantId,'clientID':account['user']['name']}}
+    
+    
+    if cloud=='DOGFOOD':
+        dict_file['cloud']='AzureDogFood'
+    
+    ##Fetching creds
+    creds_location=os.path.expanduser(os.path.join('~', creds_string))
+    with open(creds_location) as f:
+        creds_list = json.load(f)
+    user_name=account['user']['name']
+    creds=''
+    loop_flag=False
+    for i in range(len(creds_list)) :
+        if loop_flag :
+            break
+        creds_obj=creds_list[i]
+        for key in creds_obj :
+            if user_type=='user':
+                if key=='refreshToken':
+                    creds=creds_obj[key]
+                elif key=='userId':
+                    if creds_obj[key]==user_name:
+                        loop_flag=True
+            else :
+                if key=='accessToken':
+                    creds=creds_obj[key]
+                elif key=='servicePrincipalId':
+                    if creds_obj[key]==user_name:
+                        loop_flag=True
+    
+    if user_type!='user':
+        dict_file['identity']['clientSecret']=creds
+    
+    with open(config_file_location,'w') as f:
+        yaml.dump(dict_file,f,default_flow_style=False)
+    
+    args.append("-c")
+    args.append(config_file_location)
+
     if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
     
-    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,operating_system,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,api_server_port,operating_system,creds,user_type,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
     
 
 ##Prepare data as needed by client proxy executable
@@ -1503,13 +1549,17 @@ def client_side_proxy(cmd,
                       flag,
                       args,
                       client_proxy_port,
+                      api_server_port,
                       operating_system,
+                      creds,
+                      user_type,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
                       context_name=None):
     
     subscription_id = get_subscription_id(cmd.cli_ctx)
+
     if token is not None:
         value = AuthenticationDetailsValue(token=token)
         telemetry.add_extension_event('connectedk8s', {'Context.Default.AzureCLI.IsAADEnabled': False})    
@@ -1539,6 +1589,12 @@ def client_side_proxy(cmd,
         if operating_system=='Linux' or operating_system=='Darwin':
             time.sleep(10)
     
+    if user_type=='user':
+        identity_data={}
+        identity_data['refreshToken']=creds
+        identity_uri=f'https://localhost:{api_server_port}/identity/rt'
+        requests.post(identity_uri,json=identity_data,verify=False)
+
     data=prepare_clientproxy_data(response)
     expiry=data['hybridConnectionConfig']['expirationTime']
 
