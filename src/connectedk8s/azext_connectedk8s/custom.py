@@ -8,7 +8,7 @@ import os
 import json
 import tempfile
 import time
-from subprocess import Popen, PIPE, run, STDOUT, call
+from subprocess import Popen, PIPE, run, STDOUT, call, DEVNULL
 from base64 import b64encode,b64decode
 import stat
 import platform
@@ -37,7 +37,7 @@ import azext_connectedk8s._utils as utils
 from glob import glob
 from .vendored_sdks.models import ConnectedCluster, ConnectedClusterAADProfile, ConnectedClusterIdentity, AuthenticationDetailsValue
 from threading import Timer,Thread
-from sys import exit
+import sys
 logger = get_logger(__name__)
 from _thread import interrupt_main 
 from threading import active_count
@@ -1520,11 +1520,12 @@ def client_side_proxy_wrapper(cmd,
     
     args.append("-c")
     args.append(config_file_location)
-
+    debug_mode=False
     if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
-    
-    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,api_server_port,operating_system,creds,user_type,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
+        debug_mode=True
+
+    client_side_proxy(cmd,client,resource_group_name,cluster_name,0,args,client_proxy_port,api_server_port,operating_system,creds,user_type,debug_mode,token=token,path=path,overwrite_existing=overwrite_existing,context_name=context_name)
     
 
 ##Prepare data as needed by client proxy executable
@@ -1553,6 +1554,7 @@ def client_side_proxy(cmd,
                       operating_system,
                       creds,
                       user_type,
+                      debug_mode,
                       token=None,
                       path=os.path.join(os.path.expanduser('~'), '.kube', 'config'),
                       overwrite_existing=False,
@@ -1577,9 +1579,14 @@ def client_side_proxy(cmd,
     
     ##Starting the client proxy process, if this is the first time that this function is invoked
     if flag==0 :
-        clientproxy_process = Thread(target=call,args=(args,))
+        if debug_mode:
+            clientproxy_process = Thread(target=call,args=(args,))
+        else :
+            clientproxy_process = Thread(target=call,args=(args,),kwargs={'stderr':DEVNULL,'stdout':DEVNULL})
+
         try :
             clientproxy_process.start()
+            print(f'Proxy is set on port {api_server_port}')
         except Exception as e:
             telemetry.set_exception(exception=e, fault_type=consts.Run_Clientproxy_Fault_Type,
                                 summary='Unable to run client proxy executable')
@@ -1593,7 +1600,14 @@ def client_side_proxy(cmd,
         identity_data={}
         identity_data['refreshToken']=creds
         identity_uri=f'https://localhost:{api_server_port}/identity/rt'
+        
+        ##Needed to prevent skip tls warning from printing to the console
+        original_stderr=sys.stderr
+        f = open(os.devnull, 'w')
+        sys.stderr = f
+
         requests.post(identity_uri,json=identity_data,verify=False)
+        sys.stderr=original_stderr
 
     data=prepare_clientproxy_data(response)
     expiry=data['hybridConnectionConfig']['expirationTime']
