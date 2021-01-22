@@ -1586,7 +1586,7 @@ def client_side_proxy(cmd,
 
         try :
             clientproxy_process.start()
-            print(f'Proxy is set on port {api_server_port}')
+            print(f'Proxy is listening on port {api_server_port}')
         except Exception as e:
             telemetry.set_exception(exception=e, fault_type=consts.Run_Clientproxy_Fault_Type,
                                 summary='Unable to run client proxy executable')
