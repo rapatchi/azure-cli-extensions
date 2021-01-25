@@ -1389,6 +1389,7 @@ CLIENT_PROXY_VERSION='0.1.0'
 API_SERVER_PORT=47011
 CLIENT_PROXY_PORT=47010
 CLIENTPROXY_CLIENT_ID='04b07795-8ddb-461a-bbee-02f9e1bf7b46'
+API_CALL_RETRIES=10
 def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
@@ -1592,11 +1593,8 @@ def client_side_proxy(cmd,
                                 summary='Unable to run client proxy executable')
             raise CLIError("Failed to start proxy process." + str(e))
         
-        ##Proxy takes some time to start on linux, so adding a delay here.
-        if operating_system=='Linux' or operating_system=='Darwin':
-            time.sleep(10)
     
-    if user_type=='user':
+    if user_type=='user' and flag==0 :
         identity_data={}
         identity_data['refreshToken']=creds
         identity_uri=f'https://localhost:{api_server_port}/identity/rt'
@@ -1606,7 +1604,9 @@ def client_side_proxy(cmd,
         f = open(os.devnull, 'w')
         sys.stderr = f
 
-        requests.post(identity_uri,json=identity_data,verify=False)
+        make_api_call_with_retries(identity_uri,identity_data,False,consts.Post_RefreshToken_Fault_Type,
+        'Unable to post refresh token details to clientproxy',
+        "Failed to pass refresh token details to proxy.")
         sys.stderr=original_stderr
 
     data=prepare_clientproxy_data(response)
@@ -1621,12 +1621,9 @@ def client_side_proxy(cmd,
     uri=f'http://localhost:{client_proxy_port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
     
     ##Posting hybrid connection details to proxy in order to get kubeconfig
-    try :
-        response=requests.post(uri,json=data)
-    except Exception as e:
-        telemetry.set_exception(exception=e, fault_type=consts.Post_Hybridconn_Fault_Type,
-                                summary='Unable to post hybrid connection details to clientproxy')
-        raise CLIError("Failed to pass hybrid connection details to proxy." + str(e))
+    response=make_api_call_with_retries(uri,data,False,consts.Post_Hybridconn_Fault_Type,
+    'Unable to post hybrid connection details to clientproxy',
+    "Failed to pass hybrid connection details to proxy.")
     
     ##Decoding kubeconfig into a string
     kubeconfig=json.loads(response.text)
@@ -1642,5 +1639,15 @@ def client_side_proxy(cmd,
         raise CLIError("Failed to merge kubeconfig." + str(e))
     
 
-
-        
+def make_api_call_with_retries(uri,data,tls_verify,fault_type,summary,cli_error):
+    for i in range(API_CALL_RETRIES):
+        try :
+            response=requests.post(uri,json=data,verify=tls_verify)
+            return  response
+        except Exception as e:
+            if i!=API_CALL_RETRIES-1:
+                pass
+            else :
+                telemetry.set_exception(exception=e,fault_type=fault_type,summary=summary)
+                raise CLIError(cli_error+str(e))
+                

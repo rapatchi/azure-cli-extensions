@@ -71,6 +71,7 @@ Remove_File_Fault_Type="Error while removing older client proxy executables."
 Open_File_Fault_Type="Error while opening file in read mode"
 Run_Clientproxy_Fault_Type="Error while starting client proxy process."
 Post_Hybridconn_Fault_Type="Error while posting hybrid connection details to proxy process"
+Post_RefreshToken_Fault_Type="Error while posting refresh token details to proxy process"
 Merge_Kubeconfig_Fault_Type="Error while merging kubeconfig."
 Unsupported_Fault_Type="Error while checking operating system.Unsupported OS detected."
 
