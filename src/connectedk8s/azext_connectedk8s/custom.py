@@ -1389,7 +1389,7 @@ CLIENT_PROXY_VERSION='0.1.0'
 API_SERVER_PORT=47011
 CLIENT_PROXY_PORT=47010
 CLIENTPROXY_CLIENT_ID='04b07795-8ddb-461a-bbee-02f9e1bf7b46'
-API_CALL_RETRIES=10
+API_CALL_RETRIES=30
 def client_side_proxy_wrapper(cmd,
                       client,
                       resource_group_name,
