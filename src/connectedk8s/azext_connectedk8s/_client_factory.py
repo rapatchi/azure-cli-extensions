@@ -10,7 +10,7 @@ from azure.graphrbac import GraphRbacManagementClient
 
 
 def cf_connectedk8s(cli_ctx, *_):
-    from azext_connectedk8s.vendored_sdks import ConnectedKubernetesClient
+    from azext_connectedk8s.preview import ConnectedKubernetesClient
     return get_mgmt_service_client(cli_ctx, ConnectedKubernetesClient)
 
 

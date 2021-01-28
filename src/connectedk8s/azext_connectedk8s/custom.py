@@ -1572,7 +1572,7 @@ def client_side_proxy(cmd,
     
     ##Fetching hybrid connection details from Userrp
     try :
-        response=client.list_cluster_user_credentials(resource_group_name,cluster_name, value,client_proxy=True)
+        response=client.list_cluster_user_credentials(resource_group_name,cluster_name, 'AAD',True)
     except Exception as e:
         telemetry.set_exception(exception=e, fault_type=consts.Get_Credentials_Failed_Fault_Type,
                                 summary='Unable to list cluster user credentials')
