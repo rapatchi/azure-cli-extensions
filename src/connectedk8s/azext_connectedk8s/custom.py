@@ -1472,55 +1472,61 @@ def client_side_proxy_wrapper(cmd,
     if os.path.isfile(config_file_location) :
         os.remove(config_file_location)
 
-    ##Identifying type of logged in entity
-    account = get_subscription_id(cmd.cli_ctx)
-    account=Profile().get_subscription(account)
-    user_type=account['user']['type']
-
-    tenantId=_graph_client_factory(cmd.cli_ctx).config.tenant_id
-    
-    if user_type=='user':
-        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)},'identity':{'tenantID':tenantId,'clientID':CLIENTPROXY_CLIENT_ID}}
-    else :
-        dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)},'identity':{'tenantID':tenantId,'clientID':account['user']['name']}}
-    
-    
-    if cloud=='DOGFOOD':
-        dict_file['cloud']='AzureDogFood'
-    
-    ##Fetching creds
-    creds_location=os.path.expanduser(os.path.join('~', creds_string))
-    with open(creds_location) as f:
-        creds_list = json.load(f)
-    user_name=account['user']['name']
+    #initializations
+    user_type='sat' 
     creds=''
-    loop_flag=False
-    for i in range(len(creds_list)) :
-        if loop_flag :
-            break
-        creds_obj=creds_list[i]
-        for key in creds_obj :
-            if user_type=='user':
-                if key=='refreshToken':
-                    creds=creds_obj[key]
-                elif key=='userId':
-                    if creds_obj[key]==user_name:
-                        loop_flag=True
-            else :
-                if key=='accessToken':
-                    creds=creds_obj[key]
-                elif key=='servicePrincipalId':
-                    if creds_obj[key]==user_name:
-                        loop_flag=True
-    
-    if user_type!='user':
-        dict_file['identity']['clientSecret']=creds
-    
-    with open(config_file_location,'w') as f:
-        yaml.dump(dict_file,f,default_flow_style=False)
-    
-    args.append("-c")
-    args.append(config_file_location)
+
+    ##if service account token is not passed
+    if token is None :
+        ##Identifying type of logged in entity
+        account = get_subscription_id(cmd.cli_ctx)
+        account=Profile().get_subscription(account)
+        user_type=account['user']['type']
+
+        tenantId=_graph_client_factory(cmd.cli_ctx).config.tenant_id
+        
+        if user_type=='user':
+            dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)},'identity':{'tenantID':tenantId,'clientID':CLIENTPROXY_CLIENT_ID}}
+        else :
+            dict_file={'server':{'httpPort':int(client_proxy_port),'httpsPort':int(api_server_port)},'identity':{'tenantID':tenantId,'clientID':account['user']['name']}}
+        
+        
+        if cloud=='DOGFOOD':
+            dict_file['cloud']='AzureDogFood'
+        
+        ##Fetching creds
+        creds_location=os.path.expanduser(os.path.join('~', creds_string))
+        with open(creds_location) as f:
+            creds_list = json.load(f)
+        user_name=account['user']['name']
+        loop_flag=False
+        for i in range(len(creds_list)) :
+            if loop_flag :
+                break
+            creds_obj=creds_list[i]
+            for key in creds_obj :
+                if user_type=='user':
+                    if key=='refreshToken':
+                        creds=creds_obj[key]
+                    elif key=='userId':
+                        if creds_obj[key]==user_name:
+                            loop_flag=True
+                else :
+                    if key=='accessToken':
+                        creds=creds_obj[key]
+                    elif key=='servicePrincipalId':
+                        if creds_obj[key]==user_name:
+                            loop_flag=True
+        
+        if user_type!='user':
+            dict_file['identity']['clientSecret']=creds
+        
+        with open(config_file_location,'w') as f:
+            yaml.dump(dict_file,f,default_flow_style=False)
+        
+        args.append("-c")
+        args.append(config_file_location)
+
     debug_mode=False
     if '--debug' in cmd.cli_ctx.data['safe_params'] :
         args.append("-d")
@@ -1612,6 +1618,9 @@ def client_side_proxy(cmd,
     data=prepare_clientproxy_data(response)
     expiry=data['hybridConnectionConfig']['expirationTime']
 
+    if token is not None :
+        data['kubeconfigs'][0]['value']=insert_token_in_kubeconfig(data,token)
+    
     ##Starting a timer to refresh the credentials, 5 mins before expiry
     fun_args=[cmd,client,resource_group_name,cluster_name,1,args,client_proxy_port,operating_system,token,path,overwrite_existing,context_name]
     refresh_thread=Timer(expiry-time.time()-300,client_side_proxy,args=fun_args)
@@ -1650,4 +1659,13 @@ def make_api_call_with_retries(uri,data,tls_verify,fault_type,summary,cli_error)
             else :
                 telemetry.set_exception(exception=e,fault_type=fault_type,summary=summary)
                 raise CLIError(cli_error+str(e))
-                
+
+def insert_token_in_kubeconfig(data,token) :
+    b64kubeconfig=data['kubeconfigs'][0]['value']
+    decoded_kubeconfig_str=b64decode(b64kubeconfig).decode("utf-8")
+    dict_yaml=yaml.safe_load(decoded_kubeconfig_str)
+    dict_yaml['users'][0]['user']['token']=token
+    kubeconfig=yaml.dump(dict_yaml).encode("utf-8")
+    b64kubeconfig=b64encode(kubeconfig).decode("utf-8")
+    return b64kubeconfig
+    
